@@ -50,7 +50,7 @@ pub struct SchemaRecord {
 
 A schema ID is the SHA-256 hash of the XDR-encoded author address, name, and version concatenated in order:
 
-```
+```text
 schema_id = sha256( xdr(author) || xdr(name) || xdr(version) )
 ```
 
