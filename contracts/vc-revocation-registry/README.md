@@ -33,8 +33,8 @@ pub struct RevocationRecord {
 | Function | Auth | Description |
 |----------|------|-------------|
 | `initialize(admin)` | admin | One-time init; stores admin |
-| `revoke(issuer, vc_id, reason)` | issuer | Mark a VC as revoked |
-| `batch_revoke(issuer, vc_ids, reason)` | issuer | Revoke multiple VCs in one tx |
+| `revoke(issuer, vc_id, reason)` | admin or issuer | Mark a VC as revoked |
+| `batch_revoke(issuer, vc_ids, reason)` | admin or issuer | Revoke multiple VCs in one tx |
 | `unrevoke(vc_id)` | admin | Remove a revocation entry (admin-only) |
 | `is_revoked(vc_id)` | — | Returns `true` if VC is revoked |
 | `get_revocation(vc_id)` | — | Returns `RevocationRecord` or panics |
@@ -68,6 +68,29 @@ cargo build -p vc-revocation-registry-contract
 # Build WASM for deployment
 stellar contract build
 ```
+
+## Security Considerations
+
+### VC Ownership Verification
+
+This contract **does not** independently verify that a VC ID was originally issued by the revoking issuer. The contract trusts the `issuer` parameter provided by the caller and requires that address to authenticate the transaction via Soroban's `require_auth()` mechanism.
+
+### Recommended Usage Pattern
+
+For production deployments, this contract should be used in conjunction with the `vc-issuer-registry` contract:
+
+1. **Issuer Registration**: Only pre-approved issuers should be registered in `vc-issuer-registry`
+2. **Issuance**: When issuing VCs off-chain, issuers should sign credentials with their registered Stellar address
+3. **Revocation**: Issuers can only revoke VCs by authenticating with their Stellar key
+4. **Verification**: Verifiers should check both:
+   - The issuer is in the allowed list (`vc-issuer-registry.is_issuer_allowed()`)
+   - The VC is not revoked (`vc-revocation-registry.is_revoked()`)
+
+This two-contract pattern provides defense-in-depth: even if an attacker could somehow revoke an arbitrary VC ID, verifiers would reject the credential if the "issuer" isn't in the allowlist.
+
+### TTL Management
+
+Revocation records use Soroban's persistent storage with automatic TTL extension on both reads and writes. This ensures that revocations remain accessible as long as they are periodically queried, preventing false negatives from expired storage.
 
 ## Usage Example
 

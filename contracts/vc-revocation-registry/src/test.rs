@@ -3,7 +3,10 @@
 #![cfg(test)]
 
 use crate::contract::{VcRevocationRegistryContract, VcRevocationRegistryContractClient};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{
+    testutils::Address as _, Address, BytesN, Env, Symbol, Vec,
+    testutils::{AuthorizedFunction, AuthorizedInvocation},
+};
 
 const VC_ID_1: [u8; 32] = [1u8; 32];
 const VC_ID_2: [u8; 32] = [2u8; 32];
@@ -21,6 +24,35 @@ fn test_initialize() {
     client.initialize(&admin);
 
     assert_eq!(client.admin(), admin);
+}
+
+#[test]
+fn test_initialize_requires_admin_auth() {
+    let env = Env::default();
+    
+    let contract_id = env.register(VcRevocationRegistryContract, ());
+    let client = VcRevocationRegistryContractClient::new(&env, &contract_id);
+    
+    let admin = Address::generate(&env);
+    
+    // Verify that initialize requires authentication from the admin
+    client.initialize(&admin);
+    
+    // Check that the admin was authenticated
+    assert_eq!(
+        env.auths(),
+        std::vec![(
+            admin.clone(),
+            AuthorizedInvocation {
+                function: AuthorizedFunction::Contract((
+                    contract_id.clone(),
+                    soroban_sdk::symbol_short!("initialize"),
+                    (admin.clone(),).into_val(&env)
+                )),
+                sub_invocations: std::vec![]
+            }
+        )]
+    );
 }
 
 #[test]
@@ -205,6 +237,103 @@ fn test_get_revocation_not_revoked() {
     
     let admin = Address::generate(&env);
     client.initialize(&admin);
+    
+    let vc_id = BytesN::<32>::from_array(&env, &VC_ID_1);
+    client.get_revocation(&vc_id);
+}
+
+#[test]
+fn test_revoke_requires_issuer_auth() {
+    let env = Env::default();
+    
+    let contract_id = env.register(VcRevocationRegistryContract, ());
+    let client = VcRevocationRegistryContractClient::new(&env, &contract_id);
+    
+    let admin = Address::generate(&env);
+    let issuer = Address::generate(&env);
+    
+    env.mock_all_auths();
+    client.initialize(&admin);
+    
+    // Clear previous auths and test revoke
+    let vc_id = BytesN::<32>::from_array(&env, &VC_ID_1);
+    client.revoke(&issuer, &vc_id, &None);
+    
+    // Verify issuer was required to authenticate
+    let auths = env.auths();
+    assert!(auths.iter().any(|(addr, _)| addr == &issuer));
+}
+
+#[test]
+fn test_batch_revoke_requires_issuer_auth() {
+    let env = Env::default();
+    
+    let contract_id = env.register(VcRevocationRegistryContract, ());
+    let client = VcRevocationRegistryContractClient::new(&env, &contract_id);
+    
+    let admin = Address::generate(&env);
+    let issuer = Address::generate(&env);
+    
+    env.mock_all_auths();
+    client.initialize(&admin);
+    
+    let vc_id_1 = BytesN::<32>::from_array(&env, &VC_ID_1);
+    let vc_id_2 = BytesN::<32>::from_array(&env, &VC_ID_2);
+    
+    let mut vc_ids = Vec::new(&env);
+    vc_ids.push_back(vc_id_1);
+    vc_ids.push_back(vc_id_2);
+    
+    client.batch_revoke(&issuer, &vc_ids, &None);
+    
+    // Verify issuer was required to authenticate
+    let auths = env.auths();
+    assert!(auths.iter().any(|(addr, _)| addr == &issuer));
+}
+
+#[test]
+fn test_unrevoke_requires_admin_auth() {
+    let env = Env::default();
+    
+    let contract_id = env.register(VcRevocationRegistryContract, ());
+    let client = VcRevocationRegistryContractClient::new(&env, &contract_id);
+    
+    let admin = Address::generate(&env);
+    let issuer = Address::generate(&env);
+    
+    env.mock_all_auths();
+    client.initialize(&admin);
+    
+    let vc_id = BytesN::<32>::from_array(&env, &VC_ID_1);
+    client.revoke(&issuer, &vc_id, &None);
+    
+    // Test unrevoke
+    client.unrevoke(&vc_id);
+    
+    // Verify admin was required to authenticate for unrevoke
+    let auths = env.auths();
+    assert!(auths.iter().any(|(addr, _)| addr == &admin));
+}
+
+#[test]
+#[should_panic(expected = "NotInitialized")]
+fn test_is_revoked_requires_initialization() {
+    let env = Env::default();
+    
+    let contract_id = env.register(VcRevocationRegistryContract, ());
+    let client = VcRevocationRegistryContractClient::new(&env, &contract_id);
+    
+    let vc_id = BytesN::<32>::from_array(&env, &VC_ID_1);
+    client.is_revoked(&vc_id);
+}
+
+#[test]
+#[should_panic(expected = "NotInitialized")]
+fn test_get_revocation_requires_initialization() {
+    let env = Env::default();
+    
+    let contract_id = env.register(VcRevocationRegistryContract, ());
+    let client = VcRevocationRegistryContractClient::new(&env, &contract_id);
     
     let vc_id = BytesN::<32>::from_array(&env, &VC_ID_1);
     client.get_revocation(&vc_id);

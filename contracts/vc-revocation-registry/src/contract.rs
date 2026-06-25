@@ -38,6 +38,17 @@ impl VcRevocationRegistryContract {
 
     /// Mark a single VC as revoked. Only the original issuer can revoke their own VC.
     /// 
+    /// # Security Note
+    /// This contract trusts the caller-provided `issuer` parameter and requires that
+    /// address to authenticate the call via `require_auth()`. The contract does NOT
+    /// independently verify that the VC ID was originally issued by this issuer.
+    /// 
+    /// For production use, this contract should be used in conjunction with the
+    /// `vc-issuer-registry` contract where issuers are pre-registered and validated.
+    /// Verifiers should check both:
+    /// 1. The issuer is in the allowed list (via vc-issuer-registry)
+    /// 2. The VC is not revoked (via this contract)
+    /// 
     /// # Arguments
     /// * `issuer` - The address of the issuer who is revoking the credential
     /// * `vc_id` - The unique identifier (32-byte hash) of the credential to revoke
@@ -63,6 +74,11 @@ impl VcRevocationRegistryContract {
 
     /// Mark multiple VCs as revoked in a single transaction. Only the original
     /// issuer can revoke their own VCs.
+    /// 
+    /// # Security Note
+    /// This contract trusts the caller-provided `issuer` parameter and requires that
+    /// address to authenticate the call. See the security note on `revoke()` for details
+    /// about the trust model and recommended usage with `vc-issuer-registry`.
     /// 
     /// # Arguments
     /// * `issuer` - The address of the issuer who is revoking the credentials
@@ -119,13 +135,26 @@ impl VcRevocationRegistryContract {
     // -----------------------------------------------------------------------
 
     /// Returns true if the VC is revoked.
+    /// 
+    /// # Panics
+    /// * `NotInitialized` - If the contract has not been initialized
     pub fn is_revoked(e: Env, vc_id: BytesN<32>) -> bool {
+        if !storage::has_admin(&e) {
+            panic_with_error!(&e, ContractError::NotInitialized);
+        }
         storage::extend_instance_ttl(&e);
         storage::has_revocation(&e, &vc_id)
     }
 
     /// Returns the revocation record for a VC. Panics with NotRevoked if not revoked.
+    /// 
+    /// # Panics
+    /// * `NotInitialized` - If the contract has not been initialized
+    /// * `NotRevoked` - If the VC is not currently revoked
     pub fn get_revocation(e: Env, vc_id: BytesN<32>) -> RevocationRecord {
+        if !storage::has_admin(&e) {
+            panic_with_error!(&e, ContractError::NotInitialized);
+        }
         storage::extend_instance_ttl(&e);
         storage::read_revocation(&e, &vc_id)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotRevoked))

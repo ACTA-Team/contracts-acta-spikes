@@ -50,11 +50,27 @@ pub fn write_admin(e: &Env, admin: &Address) {
 // --- Revocation records (persistent) ---
 
 pub fn has_revocation(e: &Env, vc_id: &BytesN<32>) -> bool {
-    e.storage().persistent().has(&DataKey::Revoked(vc_id.clone()))
+    let key = DataKey::Revoked(vc_id.clone());
+    let has = e.storage().persistent().has(&key);
+    if has {
+        // Extend TTL when checking revocation status to prevent expiration
+        e.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+    }
+    has
 }
 
 pub fn read_revocation(e: &Env, vc_id: &BytesN<32>) -> Option<RevocationRecord> {
-    e.storage().persistent().get(&DataKey::Revoked(vc_id.clone()))
+    let key = DataKey::Revoked(vc_id.clone());
+    let record = e.storage().persistent().get(&key);
+    if record.is_some() {
+        // Extend TTL when reading revocation to prevent expiration
+        e.storage()
+            .persistent()
+            .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+    }
+    record
 }
 
 pub fn write_revocation(e: &Env, vc_id: &BytesN<32>, record: &RevocationRecord) {
