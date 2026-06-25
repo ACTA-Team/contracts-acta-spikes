@@ -37,6 +37,15 @@ impl VcRevocationRegistryContract {
     // -----------------------------------------------------------------------
 
     /// Mark a single VC as revoked. Only the original issuer can revoke their own VC.
+    /// 
+    /// # Arguments
+    /// * `issuer` - The address of the issuer who is revoking the credential
+    /// * `vc_id` - The unique identifier (32-byte hash) of the credential to revoke
+    /// * `reason` - Optional symbol describing the reason for revocation (e.g., "expired", "compromised")
+    /// 
+    /// # Panics
+    /// * `NotInitialized` - If the contract has not been initialized
+    /// * `AlreadyRevoked` - If the VC is already revoked
     pub fn revoke(e: Env, issuer: Address, vc_id: BytesN<32>, reason: Option<Symbol>) {
         require_admin_or_issuer(&e, &issuer);
         if storage::has_revocation(&e, &vc_id) {
@@ -54,6 +63,18 @@ impl VcRevocationRegistryContract {
 
     /// Mark multiple VCs as revoked in a single transaction. Only the original
     /// issuer can revoke their own VCs.
+    /// 
+    /// # Arguments
+    /// * `issuer` - The address of the issuer who is revoking the credentials
+    /// * `vc_ids` - Vector of unique identifiers (32-byte hashes) of credentials to revoke
+    /// * `reason` - Optional symbol describing the reason for revocation, applied to all VCs
+    /// 
+    /// # Panics
+    /// * `NotInitialized` - If the contract has not been initialized
+    /// * `AlreadyRevoked` - If any VC in the list is already revoked
+    /// 
+    /// # Note
+    /// This function is atomic - if any VC is already revoked, the entire operation fails.
     pub fn batch_revoke(e: Env, issuer: Address, vc_ids: Vec<BytesN<32>>, reason: Option<Symbol>) {
         require_admin_or_issuer(&e, &issuer);
         let timestamp = e.ledger().timestamp();
@@ -73,6 +94,16 @@ impl VcRevocationRegistryContract {
     }
 
     /// Remove a revocation entry (admin-only safeguard).
+    /// 
+    /// This is an administrative function to correct mistakes or handle exceptional cases.
+    /// Only the contract admin can unrevoke credentials.
+    /// 
+    /// # Arguments
+    /// * `vc_id` - The unique identifier of the credential to unrevoke
+    /// 
+    /// # Panics
+    /// * `NotInitialized` - If the contract has not been initialized
+    /// * `NotRevoked` - If the VC is not currently revoked
     pub fn unrevoke(e: Env, vc_id: BytesN<32>) {
         require_admin(&e);
         if !storage::has_revocation(&e, &vc_id) {
