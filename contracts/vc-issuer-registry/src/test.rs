@@ -57,7 +57,12 @@ fn test_add_issuer_happy_path() {
     let did = Bytes::from_slice(&e, b"did:example:123");
     let url = Bytes::from_slice(&e, b"https://example.com");
 
-    client.add_issuer(&issuer, &Some(name.clone()), &Some(did.clone()), &Some(url.clone()));
+    client.add_issuer(
+        &issuer,
+        &Some(name.clone()),
+        &Some(did.clone()),
+        &Some(url.clone()),
+    );
 
     assert!(client.is_issuer_allowed(&issuer));
 
@@ -146,7 +151,12 @@ fn test_set_metadata_updates_fields() {
     let name_v2 = Symbol::new(&e, "V2");
     let did_v2 = Bytes::from_slice(&e, b"did:v2");
     let url_v2 = Bytes::from_slice(&e, b"https://v2.example.com");
-    client.set_issuer_metadata(&issuer, &Some(name_v2.clone()), &Some(did_v2.clone()), &Some(url_v2.clone()));
+    client.set_issuer_metadata(
+        &issuer,
+        &Some(name_v2.clone()),
+        &Some(did_v2.clone()),
+        &Some(url_v2.clone()),
+    );
 
     let record = client.get_issuer(&issuer);
     assert_eq!(record.name, Some(name_v2));
@@ -178,7 +188,10 @@ fn test_set_metadata_preserves_allowed_false() {
     client.set_issuer_metadata(&issuer, &Some(name), &None, &None);
 
     let record = client.get_issuer(&issuer);
-    assert!(!record.allowed, "set_issuer_metadata must not re-enable a disabled issuer");
+    assert!(
+        !record.allowed,
+        "set_issuer_metadata must not re-enable a disabled issuer"
+    );
 }
 
 // ---------------------------------------------------------------------------
