@@ -52,11 +52,15 @@ pub fn write_admin(e: &Env, admin: &Address) {
 // --- Issuer records (persistent) ---
 
 pub fn has_issuer(e: &Env, issuer: &Address) -> bool {
-    e.storage().persistent().has(&DataKey::Issuer(issuer.clone()))
+    e.storage()
+        .persistent()
+        .has(&DataKey::Issuer(issuer.clone()))
 }
 
 pub fn read_issuer(e: &Env, issuer: &Address) -> Option<IssuerRecord> {
-    e.storage().persistent().get(&DataKey::Issuer(issuer.clone()))
+    e.storage()
+        .persistent()
+        .get(&DataKey::Issuer(issuer.clone()))
 }
 
 pub fn write_issuer(e: &Env, issuer: &Address, record: &IssuerRecord) {
@@ -68,7 +72,9 @@ pub fn write_issuer(e: &Env, issuer: &Address, record: &IssuerRecord) {
 }
 
 pub fn remove_issuer(e: &Env, issuer: &Address) {
-    e.storage().persistent().remove(&DataKey::Issuer(issuer.clone()));
+    e.storage()
+        .persistent()
+        .remove(&DataKey::Issuer(issuer.clone()));
 }
 
 // --- TTL helpers ---
