@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
     "contracts/vc-issuer-registry",
-    "contracts/vc-revocation-registry",
+    "contracts/vc-schema-registry",
 ]
 
 [workspace.package]
