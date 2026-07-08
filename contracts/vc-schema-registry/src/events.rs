@@ -1,6 +1,6 @@
-//! Contract events. Published on every state-changing call.
+//! Contract events. Published on key state transitions for on-chain observability.
 
-use soroban_sdk::{contractevent, Address, BytesN, Env};
+use soroban_sdk::{contractevent, Address, Bytes, Env};
 
 #[contractevent]
 pub struct Initialized {
@@ -9,36 +9,39 @@ pub struct Initialized {
 
 #[contractevent]
 pub struct SchemaRegistered {
-    pub schema_id: BytesN<32>,
+    pub id: Bytes,
     pub author: Address,
 }
 
 #[contractevent]
 pub struct SchemaDeprecated {
-    pub schema_id: BytesN<32>,
+    pub id: Bytes,
 }
 
 #[contractevent]
 pub struct SchemaUriUpdated {
-    pub schema_id: BytesN<32>,
+    pub id: Bytes,
 }
 
 pub fn initialized(e: &Env, admin: &Address) {
-    Initialized { admin: admin.clone() }.publish(e);
+    Initialized {
+        admin: admin.clone(),
+    }
+    .publish(e);
 }
 
-pub fn schema_registered(e: &Env, schema_id: &BytesN<32>, author: &Address) {
+pub fn schema_registered(e: &Env, id: &Bytes, author: &Address) {
     SchemaRegistered {
-        schema_id: schema_id.clone(),
+        id: id.clone(),
         author: author.clone(),
     }
     .publish(e);
 }
 
-pub fn schema_deprecated(e: &Env, schema_id: &BytesN<32>) {
-    SchemaDeprecated { schema_id: schema_id.clone() }.publish(e);
+pub fn schema_deprecated(e: &Env, id: &Bytes) {
+    SchemaDeprecated { id: id.clone() }.publish(e);
 }
 
-pub fn schema_uri_updated(e: &Env, schema_id: &BytesN<32>) {
-    SchemaUriUpdated { schema_id: schema_id.clone() }.publish(e);
+pub fn schema_uri_updated(e: &Env, id: &Bytes) {
+    SchemaUriUpdated { id: id.clone() }.publish(e);
 }
