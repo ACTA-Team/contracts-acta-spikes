@@ -1,7 +1,8 @@
 //! VC Revocation Registry Contract
 //!
-//! Soroban contract for on-chain revocation tracking for Verifiable Credentials.
-//! Allows authorized issuers to revoke their VCs and verifiers to check revocation status.
+//! Soroban contract for on-chain VC revocation tracking.
+//! Allows authorized issuers to revoke their own VCs and enables
+//! verifiers to check revocation status without an off-chain indexer.
 
 #![no_std]
 

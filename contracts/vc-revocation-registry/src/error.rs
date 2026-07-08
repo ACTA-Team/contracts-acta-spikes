@@ -1,4 +1,4 @@
-//! Contract error codes. Exposed as `Error(Contract, #code)` by Soroban.
+//! Contract error codes.
 
 use soroban_sdk::contracterror;
 
@@ -10,10 +10,10 @@ pub enum ContractError {
     AlreadyInitialized = 1,
     /// Contract has not been initialized yet.
     NotInitialized = 2,
-    /// VC already in revocation list.
+    /// VC is already in the revocation list.
     AlreadyRevoked = 3,
-    /// VC not present in revocation list.
+    /// VC is not present in the revocation list.
     NotRevoked = 4,
-    /// Caller is not the original issuer.
+    /// Caller is not the original issuer of the VC.
     UnauthorizedIssuer = 5,
 }

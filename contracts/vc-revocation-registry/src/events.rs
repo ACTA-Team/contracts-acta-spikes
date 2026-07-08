@@ -1,4 +1,4 @@
-//! Contract events. Published on key state transitions for on-chain observability.
+//! Contract events.
 
 use soroban_sdk::{contractevent, Address, BytesN, Env};
 
@@ -19,10 +19,7 @@ pub struct Unrevoked {
 }
 
 pub fn initialized(e: &Env, admin: &Address) {
-    Initialized {
-        admin: admin.clone(),
-    }
-    .publish(e);
+    Initialized { admin: admin.clone() }.publish(e);
 }
 
 pub fn revoked(e: &Env, vc_id: &BytesN<32>, issuer: &Address) {
@@ -34,8 +31,5 @@ pub fn revoked(e: &Env, vc_id: &BytesN<32>, issuer: &Address) {
 }
 
 pub fn unrevoked(e: &Env, vc_id: &BytesN<32>) {
-    Unrevoked {
-        vc_id: vc_id.clone(),
-    }
-    .publish(e);
+    Unrevoked { vc_id: vc_id.clone() }.publish(e);
 }
