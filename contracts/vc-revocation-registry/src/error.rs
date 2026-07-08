@@ -1,4 +1,4 @@
-//! Contract error codes.
+//! Contract error codes. Exposed as `Error(Contract, #code)` by Soroban.
 
 use soroban_sdk::contracterror;
 
@@ -6,14 +6,14 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum ContractError {
-    /// initialize() has already been called.
+    /// `initialize()` has already been called.
     AlreadyInitialized = 1,
+    /// Credential not found in the revocation registry.
+    CredentialNotFound = 2,
+    /// Credential already registered in the revocation registry.
+    CredentialAlreadyExists = 3,
     /// Contract has not been initialized yet.
-    NotInitialized = 2,
-    /// VC is already in the revocation list.
-    AlreadyRevoked = 3,
-    /// VC is not present in the revocation list.
-    NotRevoked = 4,
-    /// Caller is not the original issuer of the VC.
-    UnauthorizedIssuer = 5,
+    NotInitialized = 4,
+    /// Credential ID exceeds maximum allowed size.
+    InvalidCredentialId = 5,
 }

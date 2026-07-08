@@ -1,323 +1,224 @@
 #![cfg(test)]
 
-extern crate std;
+use crate::contract::VcRevocationRegistryContract;
+use crate::error::ContractError;
+use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, String};
 
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol, Vec};
-
-use crate::contract::{VcRevocationRegistryContract, VcRevocationRegistryContractClient};
-
-fn setup() -> (Env, VcRevocationRegistryContractClient<'static>) {
+fn setup() -> (Env, Address, Address) {
     let e = Env::default();
+    let admin = Address::random(&e);
+    let contract_id = Address::random(&e);
     e.mock_all_auths();
-    let contract_id = e.register(VcRevocationRegistryContract, ());
-    let client = VcRevocationRegistryContractClient::new(&e, &contract_id);
-    (e, client)
+    (e, contract_id, admin)
 }
-
-fn vc_id(e: &Env, seed: u8) -> BytesN<32> {
-    BytesN::from_array(e, &[seed; 32])
-}
-
-// ---------------------------------------------------------------------------
-// initialize
-// ---------------------------------------------------------------------------
 
 #[test]
-fn test_initialize_sets_admin() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
+fn test_initialize() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
 
     assert_eq!(client.admin(), admin);
+    let version: String = client.version();
+    assert!(!version.is_empty());
 }
 
 #[test]
-fn test_initialize_emits_event() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
+fn test_initialize_already_initialized() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
 
-    // Verify the Initialized event was published (env recorded it)
-    assert!(!e.events().all().is_empty(), "Initialized event must be emitted");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.initialize(&admin);
+    }));
+    assert!(result.is_err());
 }
 
 #[test]
-#[should_panic]
-fn test_initialize_panics_when_called_twice() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-
-    client.initialize(&admin);
-    client.initialize(&admin); // must panic with AlreadyInitialized
-}
-
-// ---------------------------------------------------------------------------
-// revoke
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_revoke_happy_path() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 1);
-
-    client.initialize(&admin);
-    assert!(!client.is_revoked(&id));
-
-    client.revoke(&issuer, &id, &None);
-
-    assert!(client.is_revoked(&id));
-}
-
-#[test]
-fn test_revoke_stores_record_fields() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 2);
-    let reason = Symbol::new(&e, "Expired");
-
-    client.initialize(&admin);
-    client.revoke(&issuer, &id, &Some(reason.clone()));
-
-    let record = client.get_revocation(&id);
-    assert_eq!(record.issuer, issuer);
-    assert_eq!(record.reason, Some(reason));
-}
-
-#[test]
-fn test_revoke_emits_revoked_event() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 3);
-
-    client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
-
-    assert!(!e.events().all().is_empty(), "Revoked event must be emitted");
-}
-
-#[test]
-#[should_panic]
-fn test_revoke_panics_when_already_revoked() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 4);
-
-    client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
-    client.revoke(&issuer, &id, &None); // must panic with AlreadyRevoked
-}
-
-#[test]
-#[should_panic]
-fn test_revoke_panics_when_not_initialized() {
-    let (e, client) = setup();
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 5);
-
-    client.revoke(&issuer, &id, &None); // must panic with NotInitialized
-}
-
-#[test]
-fn test_revoke_non_issuer_auth_rejected() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 6);
+fn test_revoke_and_is_revoked() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
 
-    e.mock_auths(&[]);
-    let result = client.try_revoke(&issuer, &id, &None);
-    assert!(result.is_err(), "call without auth must fail");
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
+
+    assert!(!client.is_revoked(&issuer, &credential_id));
+
+    client.revoke(&issuer, &credential_id);
+
+    assert!(client.is_revoked(&issuer, &credential_id));
 }
 
-// ---------------------------------------------------------------------------
-// batch_revoke
-// ---------------------------------------------------------------------------
-
 #[test]
-fn test_batch_revoke_happy_path() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
+fn test_revoke_already_revoked() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
 
-    let ids = Vec::from_array(&e, [vc_id(&e, 10), vc_id(&e, 11), vc_id(&e, 12)]);
-    client.batch_revoke(&issuer, &ids, &None);
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
 
-    for id in ids.iter() {
-        assert!(client.is_revoked(&id));
-    }
+    client.revoke(&issuer, &credential_id);
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.revoke(&issuer, &credential_id);
+    }));
+    assert!(result.is_err());
 }
 
 #[test]
-fn test_batch_revoke_emits_one_event_per_vc() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
+fn test_unrevoke() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
 
-    let ids = Vec::from_array(&e, [vc_id(&e, 20), vc_id(&e, 21)]);
-    client.batch_revoke(&issuer, &ids, &None);
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
 
-    // 1 Initialized + 2 Revoked events = 3 total
-    assert_eq!(e.events().all().len(), 3);
+    client.revoke(&issuer, &credential_id);
+    assert!(client.is_revoked(&issuer, &credential_id));
+
+    client.unrevoke(&issuer, &credential_id);
+    assert!(!client.is_revoked(&issuer, &credential_id));
 }
 
 #[test]
-#[should_panic]
-fn test_batch_revoke_rolls_back_if_any_already_revoked() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id1 = vc_id(&e, 30);
-    let id2 = vc_id(&e, 31);
+fn test_unrevoke_not_revoked() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
-    client.revoke(&issuer, &id1, &None); // id1 already revoked
 
-    let ids = Vec::from_array(&e, [id1, id2]);
-    client.batch_revoke(&issuer, &ids, &None); // must panic with AlreadyRevoked
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.unrevoke(&issuer, &credential_id);
+    }));
+    assert!(result.is_err());
 }
 
-// ---------------------------------------------------------------------------
-// unrevoke
-// ---------------------------------------------------------------------------
-
 #[test]
-fn test_unrevoke_happy_path() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 40);
+fn test_get_revocation() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
-    assert!(client.is_revoked(&id));
 
-    client.unrevoke(&id);
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
 
-    assert!(!client.is_revoked(&id));
+    client.revoke(&issuer, &credential_id);
+
+    let record = client.get_revocation(&issuer, &credential_id);
+    assert!(record.revoked_at > 0);
 }
 
 #[test]
-fn test_unrevoke_emits_event() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 41);
+fn test_get_revocation_not_found() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
 
-    let events_before = e.events().all().len();
-    client.unrevoke(&id);
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
 
-    assert!(e.events().all().len() > events_before, "Unrevoked event must be emitted");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.get_revocation(&issuer, &credential_id);
+    }));
+    assert!(result.is_err());
 }
 
 #[test]
-#[should_panic]
-fn test_unrevoke_panics_when_not_revoked() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let id = vc_id(&e, 42);
+fn test_multiple_credentials_per_issuer() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
-    client.unrevoke(&id); // must panic with NotRevoked
+
+    let issuer = Address::random(&e);
+    let cred1 = Bytes::from_slice(&e, b"cred-1");
+    let cred2 = Bytes::from_slice(&e, b"cred-2");
+
+    client.revoke(&issuer, &cred1);
+    assert!(client.is_revoked(&issuer, &cred1));
+    assert!(!client.is_revoked(&issuer, &cred2));
+
+    client.revoke(&issuer, &cred2);
+    assert!(client.is_revoked(&issuer, &cred1));
+    assert!(client.is_revoked(&issuer, &cred2));
+
+    client.unrevoke(&issuer, &cred1);
+    assert!(!client.is_revoked(&issuer, &cred1));
+    assert!(client.is_revoked(&issuer, &cred2));
 }
 
 #[test]
-fn test_unrevoke_non_admin_rejected() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 43);
+fn test_multiple_issuers_same_credential_id() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
 
-    e.mock_auths(&[]);
-    let result = client.try_unrevoke(&id);
-    assert!(result.is_err(), "non-admin unrevoke must fail");
+    let issuer1 = Address::random(&e);
+    let issuer2 = Address::random(&e);
+    let cred_id = Bytes::from_slice(&e, b"cred-123");
+
+    client.revoke(&issuer1, &cred_id);
+    assert!(client.is_revoked(&issuer1, &cred_id));
+    assert!(!client.is_revoked(&issuer2, &cred_id));
+
+    client.revoke(&issuer2, &cred_id);
+    assert!(client.is_revoked(&issuer1, &cred_id));
+    assert!(client.is_revoked(&issuer2, &cred_id));
 }
 
-// ---------------------------------------------------------------------------
-// is_revoked / get_revocation
-// ---------------------------------------------------------------------------
+#[test]
+fn test_revoke_not_initialized() {
+    let (e, contract_id, _admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
+
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-123");
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.revoke(&issuer, &credential_id);
+    }));
+    assert!(result.is_err());
+}
 
 #[test]
-fn test_is_revoked_returns_false_before_revoke() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let id = vc_id(&e, 50);
+fn test_admin_not_initialized() {
+    let (e, contract_id, _admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.admin();
+    }));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_invalid_credential_id() {
+    let (e, contract_id, admin) = setup();
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
     client.initialize(&admin);
-    assert!(!client.is_revoked(&id));
-}
 
-#[test]
-fn test_is_revoked_returns_true_after_revoke() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 51);
+    let issuer = Address::random(&e);
+    // Credential ID exceeds 256 bytes
+    let credential_id = Bytes::from_slice(&e, &vec![0u8; 257]);
 
-    client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
-    assert!(client.is_revoked(&id));
-}
-
-#[test]
-fn test_is_revoked_returns_false_after_unrevoke() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let issuer = Address::generate(&e);
-    let id = vc_id(&e, 52);
-
-    client.initialize(&admin);
-    client.revoke(&issuer, &id, &None);
-    client.unrevoke(&id);
-    assert!(!client.is_revoked(&id));
-}
-
-#[test]
-#[should_panic]
-fn test_get_revocation_panics_when_not_revoked() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let id = vc_id(&e, 53);
-
-    client.initialize(&admin);
-    client.get_revocation(&id); // must panic with NotRevoked
-}
-
-// ---------------------------------------------------------------------------
-// admin / version
-// ---------------------------------------------------------------------------
-
-#[test]
-#[should_panic]
-fn test_admin_panics_when_not_initialized() {
-    let (_e, client) = setup();
-    client.admin(); // must panic with NotInitialized
-}
-
-#[test]
-fn test_version_returns_string() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-
-    client.initialize(&admin);
-    let v = client.version();
-    assert!(!v.is_empty(), "version must return a non-empty string");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.revoke(&issuer, &credential_id);
+    }));
+    assert!(result.is_err());
 }

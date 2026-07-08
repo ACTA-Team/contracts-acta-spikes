@@ -3,13 +3,16 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, RevocationRecord};
-use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Maximum allowed byte length for credential identifiers.
+const MAX_CREDENTIAL_ID_BYTES: u32 = 256;
+
 contractmeta!(
     key = "Description",
-    val = "VC Revocation Registry: on-chain revocation tracking for Verifiable Credentials",
+    val = "VC Revocation Registry: on-chain credential revocation status tracking",
 );
 
 #[contract]
@@ -17,12 +20,17 @@ pub struct VcRevocationRegistryContract;
 
 #[contractimpl]
 impl VcRevocationRegistryContract {
-
     // -----------------------------------------------------------------------
     // Initialization
     // -----------------------------------------------------------------------
 
     /// One-time initializer. Stores the admin address. Panics if already called.
+    ///
+    /// # Arguments
+    /// * `admin` - The address authorized to revoke and unrevoke credentials
+    ///
+    /// # Errors
+    /// * `AlreadyInitialized` - if `initialize` has already been called
     pub fn initialize(e: Env, admin: Address) {
         if storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::AlreadyInitialized);
@@ -34,77 +42,96 @@ impl VcRevocationRegistryContract {
     }
 
     // -----------------------------------------------------------------------
-    // Revocation management
+    // Revocation management (admin-only)
     // -----------------------------------------------------------------------
 
-    /// Mark a VC as revoked. Caller must be the issuer. Fails if already revoked.
-    pub fn revoke(e: Env, issuer: Address, vc_id: BytesN<32>, reason: Option<Symbol>) {
-        require_initialized(&e);
-        issuer.require_auth();
-        if storage::has_revocation(&e, &vc_id) {
-            panic_with_error!(&e, ContractError::AlreadyRevoked);
+    /// Revoke a credential. Records the credential as revoked with a timestamp.
+    /// Fails if the credential is already revoked.
+    ///
+    /// # Arguments
+    /// * `issuer` - The address of the credential issuer
+    /// * `credential_id` - The unique identifier for the credential (max 256 bytes)
+    ///
+    /// # Errors
+    /// * `NotInitialized` - if the contract has not been initialized
+    /// * `CredentialAlreadyExists` - if the credential is already revoked
+    /// * `InvalidCredentialId` - if credential_id exceeds max byte length
+    pub fn revoke(e: Env, issuer: Address, credential_id: Bytes) {
+        require_admin(&e);
+        validate_credential_id(&e, &credential_id);
+        if storage::has_revocation(&e, &issuer, &credential_id) {
+            panic_with_error!(&e, ContractError::CredentialAlreadyExists);
         }
         let record = RevocationRecord {
-            issuer: issuer.clone(),
             revoked_at: e.ledger().timestamp(),
-            reason,
         };
-        storage::write_revocation(&e, &vc_id, &record);
-        storage::extend_instance_ttl(&e);
-        events::revoked(&e, &vc_id, &issuer);
+        storage::write_revocation(&e, &issuer, &credential_id, &record);
+        storage::extend_revocation_ttl(&e);
+        events::credential_revoked(&e, &issuer, &credential_id);
     }
 
-    /// Revoke multiple VCs in one transaction. Rolls back if any VC is already revoked.
-    pub fn batch_revoke(e: Env, issuer: Address, vc_ids: Vec<BytesN<32>>, reason: Option<Symbol>) {
-        require_initialized(&e);
-        issuer.require_auth();
-        // Validate all first to ensure atomicity
-        for vc_id in vc_ids.iter() {
-            if storage::has_revocation(&e, &vc_id) {
-                panic_with_error!(&e, ContractError::AlreadyRevoked);
-            }
-        }
-        for vc_id in vc_ids.iter() {
-            let record = RevocationRecord {
-                issuer: issuer.clone(),
-                revoked_at: e.ledger().timestamp(),
-                reason: reason.clone(),
-            };
-            storage::write_revocation(&e, &vc_id, &record);
-            events::revoked(&e, &vc_id, &issuer);
-        }
-        storage::extend_instance_ttl(&e);
-    }
-
-    /// Remove a revocation entry (admin-only). Panics if VC is not revoked.
-    pub fn unrevoke(e: Env, vc_id: BytesN<32>) {
+    /// Unrevoke a credential by removing it from the revocation registry.
+    /// Call this when a credential should no longer be considered revoked.
+    /// Fails if the credential is not currently revoked.
+    ///
+    /// # Arguments
+    /// * `issuer` - The address of the credential issuer
+    /// * `credential_id` - The unique identifier for the credential
+    ///
+    /// # Errors
+    /// * `NotInitialized` - if the contract has not been initialized
+    /// * `CredentialNotFound` - if the credential is not revoked
+    pub fn unrevoke(e: Env, issuer: Address, credential_id: Bytes) {
         require_admin(&e);
-        if !storage::has_revocation(&e, &vc_id) {
-            panic_with_error!(&e, ContractError::NotRevoked);
+        if !storage::has_revocation(&e, &issuer, &credential_id) {
+            panic_with_error!(&e, ContractError::CredentialNotFound);
         }
-        storage::remove_revocation(&e, &vc_id);
-        storage::extend_instance_ttl(&e);
-        events::unrevoked(&e, &vc_id);
+        storage::remove_revocation(&e, &issuer, &credential_id);
+        storage::extend_revocation_ttl(&e);
+        events::credential_unrevoked(&e, &issuer, &credential_id);
     }
 
     // -----------------------------------------------------------------------
     // Read-only queries
     // -----------------------------------------------------------------------
 
-    /// Returns true if the VC is currently revoked.
-    pub fn is_revoked(e: Env, vc_id: BytesN<32>) -> bool {
+    /// Check if a credential is revoked.
+    ///
+    /// # Arguments
+    /// * `issuer` - The address of the credential issuer
+    /// * `credential_id` - The unique identifier for the credential
+    ///
+    /// # Returns
+    /// `true` if the credential is revoked, `false` otherwise
+    pub fn is_revoked(e: Env, issuer: Address, credential_id: Bytes) -> bool {
         storage::extend_instance_ttl(&e);
-        storage::has_revocation(&e, &vc_id)
+        storage::has_revocation(&e, &issuer, &credential_id)
     }
 
-    /// Returns the RevocationRecord for a VC, or panics with NotRevoked.
-    pub fn get_revocation(e: Env, vc_id: BytesN<32>) -> RevocationRecord {
+    /// Get the full revocation record for a credential. Panics if not revoked.
+    ///
+    /// # Arguments
+    /// * `issuer` - The address of the credential issuer
+    /// * `credential_id` - The unique identifier for the credential
+    ///
+    /// # Returns
+    /// The `RevocationRecord` containing the revocation timestamp
+    ///
+    /// # Errors
+    /// * `CredentialNotFound` - if the credential is not revoked
+    pub fn get_revocation(e: Env, issuer: Address, credential_id: Bytes) -> RevocationRecord {
         storage::extend_instance_ttl(&e);
-        storage::read_revocation(&e, &vc_id)
-            .unwrap_or_else(|| panic_with_error!(&e, ContractError::NotRevoked))
+        storage::read_revocation(&e, &issuer, &credential_id)
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::CredentialNotFound))
     }
 
-    /// Returns the current admin address. Panics with NotInitialized if not set.
+    /// Returns the current admin address. Panics if contract is not initialized.
+    ///
+    /// # Returns
+    /// The admin address
+    ///
+    /// # Errors
+    /// * `NotInitialized` - if the contract has not been initialized
     pub fn admin(e: Env) -> Address {
         if !storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::NotInitialized);
@@ -114,6 +141,9 @@ impl VcRevocationRegistryContract {
     }
 
     /// Returns the contract version string.
+    ///
+    /// # Returns
+    /// The version from Cargo.toml
     pub fn version(e: Env) -> soroban_sdk::String {
         soroban_sdk::String::from_str(&e, VERSION)
     }
@@ -123,13 +153,20 @@ impl VcRevocationRegistryContract {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn require_initialized(e: &Env) {
+/// Panics with `NotInitialized` if no admin is stored, or with a host auth
+/// error if the caller is not the stored admin.
+fn require_admin(e: &Env) {
     if !storage::has_admin(e) {
         panic_with_error!(e, ContractError::NotInitialized);
     }
+    let admin = storage::read_admin(e);
+    admin.require_auth();
 }
 
-fn require_admin(e: &Env) {
-    require_initialized(e);
-    storage::read_admin(e).require_auth();
+/// Validates credential ID field size. Panics with `InvalidCredentialId` if
+/// `credential_id` exceeds [`MAX_CREDENTIAL_ID_BYTES`].
+fn validate_credential_id(e: &Env, credential_id: &Bytes) {
+    if credential_id.len() > MAX_CREDENTIAL_ID_BYTES {
+        panic_with_error!(e, ContractError::InvalidCredentialId);
+    }
 }
