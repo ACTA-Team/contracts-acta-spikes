@@ -1,0 +1,44 @@
+# Build Verification
+
+This file documents successful builds of the vc-revocation-registry contract.
+
+## Build Commands
+
+### Standard Build
+```bash
+cargo build -p vc-revocation-registry-contract
+```
+
+### WASM Build (for deployment)
+```bash
+cargo build -p vc-revocation-registry-contract --target wasm32-unknown-unknown --release
+```
+
+### Using Stellar CLI
+```bash
+stellar contract build
+```
+
+## Build Output
+
+WASM artifact location: `target/wasm32-unknown-unknown/release/vc_revocation_registry_contract.wasm`
+
+## Acceptance Criteria Status
+
+- [x] Package builds: `cargo build -p vc-revocation-registry-contract`
+- [x] WASM builds: Successfully builds to wasm32-unknown-unknown target
+- [x] All entry points implemented (initialize, revoke, batch_revoke, unrevoke, is_revoked, get_revocation, admin, version)
+- [x] Admin/issuer auth enforced via require_auth()
+- [x] Events emitted for every state-changing call (Initialized, Revoked, Unrevoked)
+- [x] Code follows vc-issuer-registry conventions (no_std, modular layout, contractmeta)
+- [x] Error codes defined (AlreadyInitialized, NotInitialized, AlreadyRevoked, NotRevoked, UnauthorizedIssuer)
+- [x] Storage layout implemented (Admin instance storage, Revoked persistent storage)
+- [x] TTL management for instance and persistent storage
+- [x] Comprehensive tests included
+
+## Implementation Notes
+
+- Authorization is handled via `issuer.require_auth()` which ensures the issuer parameter matches the authenticated caller
+- Batch operations are atomic - if any VC is already revoked, the entire operation fails
+- Admin unrevoke function provides safeguard for exceptional cases
+- All timestamps use ledger timestamp for consistency
