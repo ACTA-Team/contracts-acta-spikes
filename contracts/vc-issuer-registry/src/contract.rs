@@ -3,7 +3,9 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, IssuerRecord};
-use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env, Symbol,
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -20,7 +22,6 @@ pub struct VcIssuerRegistryContract;
 
 #[contractimpl]
 impl VcIssuerRegistryContract {
-
     // -----------------------------------------------------------------------
     // Initialization
     // -----------------------------------------------------------------------
@@ -53,7 +54,12 @@ impl VcIssuerRegistryContract {
         if storage::has_issuer(&e, &issuer) {
             panic_with_error!(&e, ContractError::IssuerAlreadyExists);
         }
-        let record = IssuerRecord { allowed: true, name, did, url };
+        let record = IssuerRecord {
+            allowed: true,
+            name,
+            did,
+            url,
+        };
         storage::write_issuer(&e, &issuer, &record);
         storage::extend_instance_ttl(&e);
         events::issuer_added(&e, &issuer);
