@@ -1,8 +1,8 @@
 //! Storage layout and helpers.
 //! Instance storage  → admin (global config, low-frequency reads).
-//! Persistent storage → per-schema records (long-lived, keyed by schema id).
+//! Persistent storage → per-schema records (long-lived, keyed by BytesN<32>).
 
-use soroban_sdk::{contracttype, Address, Bytes, Env};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Symbol};
 
 // TTL constants (~5 s ledger close): 518_400 ≈ 30 days, 3_110_400 ≈ 180 days.
 const INSTANCE_TTL_THRESHOLD: u32 = 518_400;
@@ -14,22 +14,25 @@ const PERSISTENT_TTL_EXTEND_TO: u32 = 3_110_400;
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    /// Global admin (singleton, instance storage)
+    /// Global admin (singleton, instance storage).
     Admin,
-
-    /// Schema registry (per-id persistent storage)
-    Schema(Bytes),
+    /// Schema record (per-schema-id, persistent storage).
+    Schema(BytesN<32>),
 }
 
 /// On-chain record for a registered VC schema.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SchemaRecord {
-    /// Address that registered the schema (and may update/deprecate it).
+    /// Address that registered the schema and authorized it.
     pub author: Address,
-    /// URI pointing to the schema document.
-    pub uri: Bytes,
-    /// Whether this schema has been deprecated.
+    /// Human-readable schema name.
+    pub name: Symbol,
+    /// Version string for this schema.
+    pub version: Symbol,
+    /// Raw schema definition bytes (e.g. UTF-8 JSON Schema).
+    pub definition: Bytes,
+    /// Whether this schema has been deprecated. Non-destructive: record remains on-chain.
     pub deprecated: bool,
 }
 
@@ -49,16 +52,20 @@ pub fn write_admin(e: &Env, admin: &Address) {
 
 // --- Schema records (persistent) ---
 
-pub fn has_schema(e: &Env, id: &Bytes) -> bool {
-    e.storage().persistent().has(&DataKey::Schema(id.clone()))
+pub fn has_schema(e: &Env, schema_id: &BytesN<32>) -> bool {
+    e.storage()
+        .persistent()
+        .has(&DataKey::Schema(schema_id.clone()))
 }
 
-pub fn read_schema(e: &Env, id: &Bytes) -> Option<SchemaRecord> {
-    e.storage().persistent().get(&DataKey::Schema(id.clone()))
+pub fn read_schema(e: &Env, schema_id: &BytesN<32>) -> Option<SchemaRecord> {
+    e.storage()
+        .persistent()
+        .get(&DataKey::Schema(schema_id.clone()))
 }
 
-pub fn write_schema(e: &Env, id: &Bytes, record: &SchemaRecord) {
-    let key = DataKey::Schema(id.clone());
+pub fn write_schema(e: &Env, schema_id: &BytesN<32>, record: &SchemaRecord) {
+    let key = DataKey::Schema(schema_id.clone());
     e.storage().persistent().set(&key, record);
     e.storage()
         .persistent()

@@ -1,6 +1,6 @@
 //! Contract events. Published on key state transitions for on-chain observability.
 
-use soroban_sdk::{contractevent, Address, Bytes, Env};
+use soroban_sdk::{contractevent, Address, BytesN, Env};
 
 #[contractevent]
 pub struct Initialized {
@@ -9,18 +9,13 @@ pub struct Initialized {
 
 #[contractevent]
 pub struct SchemaRegistered {
-    pub id: Bytes,
+    pub schema_id: BytesN<32>,
     pub author: Address,
 }
 
 #[contractevent]
 pub struct SchemaDeprecated {
-    pub id: Bytes,
-}
-
-#[contractevent]
-pub struct SchemaUriUpdated {
-    pub id: Bytes,
+    pub schema_id: BytesN<32>,
 }
 
 pub fn initialized(e: &Env, admin: &Address) {
@@ -30,18 +25,17 @@ pub fn initialized(e: &Env, admin: &Address) {
     .publish(e);
 }
 
-pub fn schema_registered(e: &Env, id: &Bytes, author: &Address) {
+pub fn schema_registered(e: &Env, schema_id: &BytesN<32>, author: &Address) {
     SchemaRegistered {
-        id: id.clone(),
+        schema_id: schema_id.clone(),
         author: author.clone(),
     }
     .publish(e);
 }
 
-pub fn schema_deprecated(e: &Env, id: &Bytes) {
-    SchemaDeprecated { id: id.clone() }.publish(e);
-}
-
-pub fn schema_uri_updated(e: &Env, id: &Bytes) {
-    SchemaUriUpdated { id: id.clone() }.publish(e);
+pub fn schema_deprecated(e: &Env, schema_id: &BytesN<32>) {
+    SchemaDeprecated {
+        schema_id: schema_id.clone(),
+    }
+    .publish(e);
 }

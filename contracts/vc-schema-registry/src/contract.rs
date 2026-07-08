@@ -3,16 +3,17 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, SchemaRecord};
-use soroban_sdk::{contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env};
+use soroban_sdk::{
+    contract, contractimpl, contractmeta, panic_with_error,
+    xdr::ToXdr,
+    Address, Bytes, BytesN, Env, Symbol,
+};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Maximum allowed byte length for the `uri` field.
-const MAX_URI_BYTES: u32 = 256;
-
 contractmeta!(
     key = "Description",
-    val = "VC Schema Registry: on-chain registration and governance of VC schemas",
+    val = "VC Schema Registry: on-chain schema registry for verifiable credentials",
 );
 
 #[contract]
@@ -25,7 +26,8 @@ impl VcSchemaRegistryContract {
     // Initialization
     // -----------------------------------------------------------------------
 
-    /// One-time initializer. Stores the admin address. Panics if already called.
+    /// One-time initializer. Stores the admin address and emits `Initialized`.
+    /// Panics with `AlreadyInitialized` if called more than once.
     pub fn initialize(e: Env, admin: Address) {
         if storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::AlreadyInitialized);
@@ -40,71 +42,111 @@ impl VcSchemaRegistryContract {
     // Schema management
     // -----------------------------------------------------------------------
 
-    /// Register a new schema. Caller must be the declared `author`.
-    /// Fails if `id` is already registered, or `uri` exceeds [`MAX_URI_BYTES`].
-    pub fn register_schema(e: Env, id: Bytes, author: Address, uri: Bytes) {
+    /// Register a new schema. `author` must authorize this call.
+    ///
+    /// The schema ID is derived deterministically as
+    /// `sha256(xdr(author) || xdr(name) || xdr(version))` and returned to the
+    /// caller. This ID is stable: the same `(author, name, version)` triple
+    /// always produces the same ID, on-chain and off-chain alike.
+    ///
+    /// Panics with `NotInitialized` if the contract has not been initialized.
+    /// Panics with `SchemaAlreadyExists` if the triple is already registered.
+    pub fn register_schema(
+        e: Env,
+        author: Address,
+        name: Symbol,
+        version: Symbol,
+        definition: Bytes,
+    ) -> BytesN<32> {
+        if !storage::has_admin(&e) {
+            panic_with_error!(&e, ContractError::NotInitialized);
+        }
         author.require_auth();
-        if storage::has_schema(&e, &id) {
+
+        let schema_id = compute_schema_id(&e, &author, &name, &version);
+
+        if storage::has_schema(&e, &schema_id) {
             panic_with_error!(&e, ContractError::SchemaAlreadyExists);
         }
-        validate_uri(&e, &uri);
+
         let record = SchemaRecord {
             author: author.clone(),
-            uri,
+            name,
+            version,
+            definition,
             deprecated: false,
         };
-        storage::write_schema(&e, &id, &record);
+        storage::write_schema(&e, &schema_id, &record);
         storage::extend_instance_ttl(&e);
-        events::schema_registered(&e, &id, &author);
+        events::schema_registered(&e, &schema_id, &author);
+
+        schema_id
     }
 
-    /// Mark a schema as deprecated. Callable by the contract admin or the
-    /// schema's original author; all other callers fail authorization.
-    pub fn deprecate_schema(e: Env, id: Bytes, caller: Address) {
-        caller.require_auth();
-        let mut record = storage::read_schema(&e, &id)
-            .unwrap_or_else(|| panic_with_error!(&e, ContractError::SchemaNotFound));
-        require_admin_or_author(&e, &caller, &record);
-        record.deprecated = true;
-        storage::write_schema(&e, &id, &record);
-        storage::extend_instance_ttl(&e);
-        events::schema_deprecated(&e, &id);
-    }
-
-    /// Update the URI for an existing schema. Only the original author may
-    /// call this. Fails if `uri` exceeds [`MAX_URI_BYTES`].
-    pub fn update_schema_uri(e: Env, id: Bytes, caller: Address, uri: Bytes) {
-        caller.require_auth();
-        let mut record = storage::read_schema(&e, &id)
-            .unwrap_or_else(|| panic_with_error!(&e, ContractError::SchemaNotFound));
-        if record.author != caller {
-            panic_with_error!(&e, ContractError::NotAuthorized);
+    /// Deprecate a registered schema. `caller` must be either the contract
+    /// admin or the author of that specific schema.
+    ///
+    /// Deprecation is **non-destructive**: the `SchemaRecord` remains on-chain
+    /// with `deprecated = true`. Downstream consumers should treat deprecated
+    /// schemas as invalid for new credential issuance while still being able
+    /// to verify credentials that reference them.
+    ///
+    /// Panics with `NotInitialized` if the contract has not been initialized.
+    /// Panics with `SchemaNotFound` if `schema_id` does not exist.
+    /// Panics with `Unauthorized` if `caller` is neither admin nor the schema author.
+    /// Panics with `AlreadyDeprecated` if the schema is already deprecated.
+    pub fn deprecate_schema(e: Env, schema_id: BytesN<32>, caller: Address) {
+        if !storage::has_admin(&e) {
+            panic_with_error!(&e, ContractError::NotInitialized);
         }
-        validate_uri(&e, &uri);
-        record.uri = uri;
-        storage::write_schema(&e, &id, &record);
+        caller.require_auth();
+
+        let mut record = storage::read_schema(&e, &schema_id)
+            .unwrap_or_else(|| panic_with_error!(&e, ContractError::SchemaNotFound));
+
+        let admin = storage::read_admin(&e);
+        if caller != admin && caller != record.author {
+            panic_with_error!(&e, ContractError::Unauthorized);
+        }
+
+        if record.deprecated {
+            panic_with_error!(&e, ContractError::AlreadyDeprecated);
+        }
+
+        record.deprecated = true;
+        storage::write_schema(&e, &schema_id, &record);
         storage::extend_instance_ttl(&e);
-        events::schema_uri_updated(&e, &id);
+        events::schema_deprecated(&e, &schema_id);
     }
 
     // -----------------------------------------------------------------------
     // Read-only queries
     // -----------------------------------------------------------------------
 
-    /// Returns the full record for a schema, or panics with SchemaNotFound.
-    pub fn get_schema(e: Env, id: Bytes) -> SchemaRecord {
+    /// Returns the full `SchemaRecord` for the given ID.
+    /// Panics with `SchemaNotFound` if the ID is not in the registry.
+    pub fn get_schema(e: Env, schema_id: BytesN<32>) -> SchemaRecord {
         storage::extend_instance_ttl(&e);
-        storage::read_schema(&e, &id)
+        storage::read_schema(&e, &schema_id)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::SchemaNotFound))
     }
 
-    /// Returns true if a schema with `id` is registered.
-    pub fn schema_exists(e: Env, id: Bytes) -> bool {
+    /// Returns `true` if a schema with the given ID exists in the registry
+    /// (regardless of its `deprecated` flag).
+    pub fn schema_exists(e: Env, schema_id: BytesN<32>) -> bool {
         storage::extend_instance_ttl(&e);
-        storage::has_schema(&e, &id)
+        storage::has_schema(&e, &schema_id)
     }
 
-    /// Returns the current admin address. Panics with NotInitialized if not set.
+    /// Computes and returns the schema ID for a given `(author, name, version)`
+    /// triple without writing to storage. Useful for off-chain pre-computation
+    /// or UI tools that need to predict the ID before submitting a transaction.
+    pub fn schema_id(e: Env, author: Address, name: Symbol, version: Symbol) -> BytesN<32> {
+        compute_schema_id(&e, &author, &name, &version)
+    }
+
+    /// Returns the current admin address.
+    /// Panics with `NotInitialized` if the contract has not been initialized.
     pub fn admin(e: Env) -> Address {
         if !storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::NotInitialized);
@@ -113,7 +155,7 @@ impl VcSchemaRegistryContract {
         storage::read_admin(&e)
     }
 
-    /// Returns the contract version string.
+    /// Returns the contract version string (taken from `Cargo.toml` at compile time).
     pub fn version(e: Env) -> soroban_sdk::String {
         soroban_sdk::String::from_str(&e, VERSION)
     }
@@ -123,19 +165,15 @@ impl VcSchemaRegistryContract {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Panics with `NotAuthorized` unless `caller` is the stored admin or the
-/// schema's author. Tolerates an uninitialized admin (author-only check).
-fn require_admin_or_author(e: &Env, caller: &Address, record: &SchemaRecord) {
-    let is_author = record.author == *caller;
-    let is_admin = storage::has_admin(e) && storage::read_admin(e) == *caller;
-    if !is_author && !is_admin {
-        panic_with_error!(e, ContractError::NotAuthorized);
-    }
-}
-
-/// Validates `uri` size. Panics with `InvalidUri` if it exceeds [`MAX_URI_BYTES`].
-fn validate_uri(e: &Env, uri: &Bytes) {
-    if uri.len() > MAX_URI_BYTES {
-        panic_with_error!(e, ContractError::InvalidUri);
-    }
+/// Computes `sha256(xdr(author) || xdr(name) || xdr(version))`.
+///
+/// XDR encoding is used for each component so the preimage is unambiguous and
+/// matches what off-chain tooling produces when serializing the same `ScVal`
+/// representations of each field.
+fn compute_schema_id(e: &Env, author: &Address, name: &Symbol, version: &Symbol) -> BytesN<32> {
+    let mut preimage = Bytes::new(e);
+    preimage.append(&author.clone().to_xdr(e));
+    preimage.append(&name.clone().to_xdr(e));
+    preimage.append(&version.clone().to_xdr(e));
+    e.crypto().sha256(&preimage).to_bytes()
 }

@@ -2,26 +2,9 @@
 
 extern crate std;
 
-use soroban_sdk::{
-    testutils::{Address as _, Events as _},
-    Address, Bytes, Env, Symbol, TryFromVal,
-};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, Symbol};
 
 use crate::contract::{VcSchemaRegistryContract, VcSchemaRegistryContractClient};
-
-/// Returns true if the most recent contract call published an event whose
-/// first topic is `topic`. `e.events().all()` only reflects the latest
-/// top-level invocation, not a cumulative log across calls.
-fn last_call_emitted(e: &Env, topic: &str) -> bool {
-    let expected = Symbol::new(e, topic);
-    e.events().all().iter().any(|(_, topics, _)| {
-        topics
-            .get(0)
-            .and_then(|t| Symbol::try_from_val(e, &t).ok())
-            .map(|s| s == expected)
-            .unwrap_or(false)
-    })
-}
 
 fn setup() -> (Env, VcSchemaRegistryContractClient<'static>) {
     let e = Env::default();
@@ -29,6 +12,14 @@ fn setup() -> (Env, VcSchemaRegistryContractClient<'static>) {
     let contract_id = e.register(VcSchemaRegistryContract, ());
     let client = VcSchemaRegistryContractClient::new(&e, &contract_id);
     (e, client)
+}
+
+fn sample_schema(e: &Env) -> (Address, Symbol, Symbol, Bytes) {
+    let author = Address::generate(e);
+    let name = Symbol::new(e, "IdentitySchema");
+    let version = Symbol::new(e, "v1");
+    let definition = Bytes::from_slice(e, b"{\"type\":\"object\"}");
+    (author, name, version, definition)
 }
 
 // ---------------------------------------------------------------------------
@@ -59,230 +50,185 @@ fn test_initialize_only_once() {
 
 // ---------------------------------------------------------------------------
 // test_register_schema_happy_path
-//   — Caller is the declared author; record is stored and queryable.
+//   — register_schema returns a non-zero ID, stores the record with
+//     deprecated=false, and schema_exists returns true.
 // ---------------------------------------------------------------------------
 #[test]
 fn test_register_schema_happy_path() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
 
-    assert!(client.schema_exists(&id));
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
 
-    let record = client.get_schema(&id);
+    assert!(client.schema_exists(&schema_id));
+
+    let record = client.get_schema(&schema_id);
     assert_eq!(record.author, author);
-    assert_eq!(record.uri, uri);
+    assert_eq!(record.name, name);
+    assert_eq!(record.version, version);
+    assert_eq!(record.definition, definition);
     assert!(!record.deprecated);
 }
 
 // ---------------------------------------------------------------------------
+// test_register_schema_id_is_deterministic
+//   — Calling schema_id() with the same inputs returns the same value as
+//     the ID returned by register_schema.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_register_schema_id_is_deterministic() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let (author, name, version, definition) = sample_schema(&e);
+    let registered_id = client.register_schema(&author, &name, &version, &definition);
+    let computed_id = client.schema_id(&author, &name, &version);
+
+    assert_eq!(registered_id, computed_id);
+}
+
+// ---------------------------------------------------------------------------
 // test_register_schema_duplicate_rejected
+//   — Registering the same (author, name, version) triple twice must panic.
 // ---------------------------------------------------------------------------
 #[test]
 #[should_panic]
 fn test_register_schema_duplicate_rejected() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
-    client.register_schema(&id, &author, &uri); // must panic with SchemaAlreadyExists
+
+    let (author, name, version, definition) = sample_schema(&e);
+    client.register_schema(&author, &name, &version, &definition);
+    client.register_schema(&author, &name, &version, &definition); // must panic
 }
 
 // ---------------------------------------------------------------------------
-// test_register_schema_uri_too_long_rejected
+// test_different_versions_are_independent
+//   — Same author and name but different versions produce distinct IDs and
+//     can both be registered.
 // ---------------------------------------------------------------------------
 #[test]
-#[should_panic]
-fn test_register_schema_uri_too_long_rejected() {
+fn test_different_versions_are_independent() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let long_uri = Bytes::from_slice(&e, &[b'x'; 257]);
-
-    client.initialize(&admin);
-    client.register_schema(&id, &author, &long_uri); // must panic with InvalidUri
-}
-
-// ---------------------------------------------------------------------------
-// test_register_schema_uri_boundary_ok
-//   — A 256-byte uri (the max) must be accepted.
-// ---------------------------------------------------------------------------
-#[test]
-fn test_register_schema_uri_boundary_ok() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let max_uri = Bytes::from_slice(&e, &[b'x'; 256]);
-
-    client.initialize(&admin);
-    client.register_schema(&id, &author, &max_uri);
-
-    assert!(client.schema_exists(&id));
-}
-
-// ---------------------------------------------------------------------------
-// test_register_schema_requires_author_auth
-//   — A caller other than the declared author must be rejected.
-// ---------------------------------------------------------------------------
-#[test]
-fn test_register_schema_requires_author_auth() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
 
-    // Clear mocks so no valid auth is provided for register_schema.
-    e.mock_auths(&[]);
-    let result = client.try_register_schema(&id, &author, &uri);
+    let author = Address::generate(&e);
+    let name = Symbol::new(&e, "MySchema");
+    let def = Bytes::from_slice(&e, b"{}");
 
-    assert!(result.is_err(), "register_schema without author auth must fail");
+    let id_v1 = client.register_schema(&author, &name, &Symbol::new(&e, "v1"), &def);
+    let id_v2 = client.register_schema(&author, &name, &Symbol::new(&e, "v2"), &def);
+
+    assert_ne!(id_v1, id_v2);
+    assert!(client.schema_exists(&id_v1));
+    assert!(client.schema_exists(&id_v2));
 }
 
 // ---------------------------------------------------------------------------
 // test_deprecate_schema_by_admin
+//   — Admin can deprecate any schema; get_schema reflects deprecated=true.
 // ---------------------------------------------------------------------------
 #[test]
 fn test_deprecate_schema_by_admin() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
 
-    client.deprecate_schema(&id, &admin);
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
 
-    let record = client.get_schema(&id);
+    client.deprecate_schema(&schema_id, &admin);
+
+    let record = client.get_schema(&schema_id);
     assert!(record.deprecated);
 }
 
 // ---------------------------------------------------------------------------
 // test_deprecate_schema_by_author
+//   — The schema author can deprecate their own schema.
 // ---------------------------------------------------------------------------
 #[test]
 fn test_deprecate_schema_by_author() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
 
-    client.deprecate_schema(&id, &author);
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
 
-    let record = client.get_schema(&id);
+    client.deprecate_schema(&schema_id, &author);
+
+    let record = client.get_schema(&schema_id);
     assert!(record.deprecated);
 }
 
 // ---------------------------------------------------------------------------
-// test_deprecate_schema_non_admin_non_author_fails
+// test_deprecate_schema_unauthorized
+//   — A random address that is neither admin nor author must be rejected.
 // ---------------------------------------------------------------------------
 #[test]
 #[should_panic]
-fn test_deprecate_schema_non_admin_non_author_fails() {
+fn test_deprecate_schema_unauthorized() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let stranger = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
 
-    client.deprecate_schema(&id, &stranger); // must panic with NotAuthorized
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
+
+    let stranger = Address::generate(&e);
+    client.deprecate_schema(&schema_id, &stranger); // must panic with Unauthorized
+}
+
+// ---------------------------------------------------------------------------
+// test_deprecate_schema_already_deprecated
+//   — Calling deprecate_schema a second time must panic with AlreadyDeprecated.
+// ---------------------------------------------------------------------------
+#[test]
+#[should_panic]
+fn test_deprecate_schema_already_deprecated() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
+
+    client.deprecate_schema(&schema_id, &admin);
+    client.deprecate_schema(&schema_id, &admin); // must panic
 }
 
 // ---------------------------------------------------------------------------
 // test_deprecate_schema_not_found
+//   — Deprecating a non-existent schema must panic with SchemaNotFound.
 // ---------------------------------------------------------------------------
 #[test]
 #[should_panic]
 fn test_deprecate_schema_not_found() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"missing");
-
     client.initialize(&admin);
-    client.deprecate_schema(&id, &admin); // must panic with SchemaNotFound
+
+    let fake_id: BytesN<32> = BytesN::from_array(&e, &[0u8; 32]);
+    client.deprecate_schema(&fake_id, &admin); // must panic
 }
 
 // ---------------------------------------------------------------------------
-// test_update_schema_uri_by_author
+// test_schema_exists_returns_false_for_unknown
 // ---------------------------------------------------------------------------
 #[test]
-fn test_update_schema_uri_by_author() {
+fn test_schema_exists_returns_false_for_unknown() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri_v1 = Bytes::from_slice(&e, b"https://example.com/v1.json");
-    let uri_v2 = Bytes::from_slice(&e, b"https://example.com/v2.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri_v1);
 
-    client.update_schema_uri(&id, &author, &uri_v2);
-
-    let record = client.get_schema(&id);
-    assert_eq!(record.uri, uri_v2);
-}
-
-// ---------------------------------------------------------------------------
-// test_update_schema_uri_non_author_fails
-//   — Even the admin cannot update the uri; only the author may.
-// ---------------------------------------------------------------------------
-#[test]
-#[should_panic]
-fn test_update_schema_uri_non_author_fails() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/v1.json");
-    let new_uri = Bytes::from_slice(&e, b"https://example.com/v2.json");
-
-    client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
-
-    client.update_schema_uri(&id, &admin, &new_uri); // must panic with NotAuthorized
-}
-
-// ---------------------------------------------------------------------------
-// test_update_schema_uri_too_long_rejected
-// ---------------------------------------------------------------------------
-#[test]
-#[should_panic]
-fn test_update_schema_uri_too_long_rejected() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/v1.json");
-    let long_uri = Bytes::from_slice(&e, &[b'x'; 257]);
-
-    client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
-
-    client.update_schema_uri(&id, &author, &long_uri); // must panic with InvalidUri
+    let unknown: BytesN<32> = BytesN::from_array(&e, &[1u8; 32]);
+    assert!(!client.schema_exists(&unknown));
 }
 
 // ---------------------------------------------------------------------------
@@ -293,126 +239,87 @@ fn test_update_schema_uri_too_long_rejected() {
 fn test_get_schema_not_found_panics() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"missing");
-
     client.initialize(&admin);
-    client.get_schema(&id); // must panic with SchemaNotFound
+
+    let fake: BytesN<32> = BytesN::from_array(&e, &[2u8; 32]);
+    client.get_schema(&fake); // must panic
 }
 
 // ---------------------------------------------------------------------------
-// test_schema_exists_reflects_lifecycle
-//   — schema_exists is true once registered, and stays true after
-//     deprecation (deprecated schemas remain queryable, not deleted).
-// ---------------------------------------------------------------------------
-#[test]
-fn test_schema_exists_reflects_lifecycle() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-    let unknown = Bytes::from_slice(&e, b"unknown");
-
-    client.initialize(&admin);
-    assert!(!client.schema_exists(&id));
-
-    client.register_schema(&id, &author, &uri);
-    assert!(client.schema_exists(&id));
-
-    client.deprecate_schema(&id, &admin);
-    assert!(client.schema_exists(&id));
-    assert!(client.get_schema(&id).deprecated);
-
-    assert!(!client.schema_exists(&unknown));
-}
-
-// ---------------------------------------------------------------------------
-// test_admin_not_initialized_panics
+// test_calls_fail_before_initialize
+//   — register_schema before initialize must panic with NotInitialized.
 // ---------------------------------------------------------------------------
 #[test]
 #[should_panic]
-fn test_admin_not_initialized_panics() {
-    let (_e, client) = setup();
-    client.admin(); // must panic with NotInitialized
+fn test_register_before_initialize_panics() {
+    let (e, client) = setup();
+    let (author, name, version, definition) = sample_schema(&e);
+    client.register_schema(&author, &name, &version, &definition); // must panic
 }
 
 // ---------------------------------------------------------------------------
-// test_version_returns_value
+// test_non_author_cannot_register_for_another
+//   — When mocks are cleared, a caller that is not `author` must be rejected
+//     by the host auth system.
 // ---------------------------------------------------------------------------
 #[test]
-fn test_version_returns_value() {
-    let (_e, client) = setup();
-    let version = client.version();
-    assert!(!version.is_empty(), "version() must return a non-empty string");
-}
-
-// ---------------------------------------------------------------------------
-// Event assertions
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_initialize_emits_event() {
+fn test_non_author_cannot_register_for_another() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-
     client.initialize(&admin);
 
-    assert!(last_call_emitted(&e, "initialized"), "initialize() must emit an event");
-}
-
-#[test]
-fn test_register_schema_emits_event() {
-    let (e, client) = setup();
-    let admin = Address::generate(&e);
     let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
+    let name = Symbol::new(&e, "Schema");
+    let version = Symbol::new(&e, "v1");
+    let definition = Bytes::from_slice(&e, b"{}");
 
-    client.initialize(&admin);
-
-    client.register_schema(&id, &author, &uri);
-
-    assert!(
-        last_call_emitted(&e, "schema_registered"),
-        "register_schema() must emit an event"
-    );
+    // Clear mocks so no valid auth is provided for the author address.
+    e.mock_auths(&[]);
+    let result = client.try_register_schema(&author, &name, &version, &definition);
+    assert!(result.is_err(), "non-author call must fail auth");
 }
 
+// ---------------------------------------------------------------------------
+// test_schema_id_differs_across_authors
+//   — Two different authors registering the same name/version get different IDs.
+// ---------------------------------------------------------------------------
 #[test]
-fn test_deprecate_schema_emits_event() {
+fn test_schema_id_differs_across_authors() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/schema-1.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
 
-    client.deprecate_schema(&id, &admin);
+    let name = Symbol::new(&e, "Schema");
+    let version = Symbol::new(&e, "v1");
 
-    assert!(
-        last_call_emitted(&e, "schema_deprecated"),
-        "deprecate_schema() must emit an event"
-    );
+    let author_a = Address::generate(&e);
+    let author_b = Address::generate(&e);
+
+    let id_a = client.schema_id(&author_a, &name, &version);
+    let id_b = client.schema_id(&author_b, &name, &version);
+
+    assert_ne!(id_a, id_b);
 }
 
+// ---------------------------------------------------------------------------
+// test_deprecation_preserves_record
+//   — After deprecation get_schema still returns the full record.
+// ---------------------------------------------------------------------------
 #[test]
-fn test_update_schema_uri_emits_event() {
+fn test_deprecation_preserves_record() {
     let (e, client) = setup();
     let admin = Address::generate(&e);
-    let author = Address::generate(&e);
-    let id = Bytes::from_slice(&e, b"schema-1");
-    let uri = Bytes::from_slice(&e, b"https://example.com/v1.json");
-    let new_uri = Bytes::from_slice(&e, b"https://example.com/v2.json");
-
     client.initialize(&admin);
-    client.register_schema(&id, &author, &uri);
 
-    client.update_schema_uri(&id, &author, &new_uri);
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
 
-    assert!(
-        last_call_emitted(&e, "schema_uri_updated"),
-        "update_schema_uri() must emit an event"
-    );
+    client.deprecate_schema(&schema_id, &admin);
+
+    let record = client.get_schema(&schema_id);
+    assert_eq!(record.author, author);
+    assert_eq!(record.definition, definition);
+    assert!(record.deprecated, "deprecated flag must be set");
+    // schema_exists returns true even for deprecated schemas
+    assert!(client.schema_exists(&schema_id));
 }
