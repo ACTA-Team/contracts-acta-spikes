@@ -7,6 +7,8 @@ This repository contains various contract implementations, proof-of-concepts, an
 ## Structure
 
 - `contracts/` - Individual contract implementations
+  - `vc-issuer-registry` - Allowlist and metadata registry for VC issuers
+  - `vc-revocation-registry` - Revocation status tracking for credentials
 - `docs/` - Documentation and specifications
 - `scripts/` - Build and deployment utilities
 
