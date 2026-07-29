@@ -6,14 +6,11 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-soroban-sdk.workspace = true
+soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[[test]]
-name = "test"
-path = "src/test.rs"
+proptest = { version = "1.5.0", default-features = false, features = ["std", "alloc"] }

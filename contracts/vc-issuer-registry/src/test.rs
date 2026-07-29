@@ -329,3 +329,116 @@ fn test_metadata_validation_boundary_ok() {
 
     assert!(client.is_issuer_allowed(&issuer));
 }
+
+// ---------------------------------------------------------------------------
+// test_metadata_validation_empty_bytes_accepted
+//   — Empty (0-byte) did/url should be accepted (no lower bound in the
+//     contract logic). This test documents current behaviour explicitly.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_metadata_validation_empty_bytes_accepted() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+
+    client.initialize(&admin);
+
+    let empty_did = Bytes::from_slice(&e, b"");
+    let empty_url = Bytes::from_slice(&e, b"");
+    client.add_issuer(&issuer, &None, &Some(empty_did), &Some(empty_url));
+
+    assert!(client.is_issuer_allowed(&issuer));
+}
+
+// ---------------------------------------------------------------------------
+// test_metadata_validation_url_exact_256_accepted
+//   — 256-byte url alone should be accepted (boundary at the exact limit).
+// ---------------------------------------------------------------------------
+#[test]
+fn test_metadata_validation_url_exact_256_accepted() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+
+    client.initialize(&admin);
+
+    let max_url = Bytes::from_slice(&e, &[b'u'; 256]);
+    client.add_issuer(&issuer, &None, &None, &Some(max_url));
+
+    assert!(client.is_issuer_allowed(&issuer));
+}
+
+// ---------------------------------------------------------------------------
+// test_metadata_validation_did_exact_256_accepted
+//   — 256-byte did alone should be accepted (boundary at the exact limit).
+// ---------------------------------------------------------------------------
+#[test]
+fn test_metadata_validation_did_exact_256_accepted() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+
+    client.initialize(&admin);
+
+    let max_did = Bytes::from_slice(&e, &[b'd'; 256]);
+    client.add_issuer(&issuer, &None, &Some(max_did), &None);
+
+    assert!(client.is_issuer_allowed(&issuer));
+}
+
+// ---------------------------------------------------------------------------
+// test_add_issuer_re_add_after_remove_succeeds
+//   — add_issuer after remove_issuer must succeed and reset allowed=true.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_add_issuer_re_add_after_remove_succeeds() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+
+    client.initialize(&admin);
+
+    // Add, remove, re-add
+    client.add_issuer(&issuer, &None, &None, &None);
+    client.remove_issuer(&issuer);
+    assert!(!client.is_issuer_allowed(&issuer));
+
+    client.add_issuer(&issuer, &None, &None, &None);
+    assert!(client.is_issuer_allowed(&issuer));
+}
+
+// ---------------------------------------------------------------------------
+// test_is_issuer_allowed_true_implies_get_issuer_succeeds
+//   — is_issuer_allowed == true implies get_issuer does not panic.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_is_issuer_allowed_true_implies_get_issuer_succeeds() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+
+    client.initialize(&admin);
+    client.add_issuer(&issuer, &None, &None, &None);
+
+    assert!(client.is_issuer_allowed(&issuer));
+    // Must not panic
+    let record = client.get_issuer(&issuer);
+    assert!(record.allowed);
+}
+
+// ---------------------------------------------------------------------------
+// test_after_remove_is_issuer_allowed_false
+//   — After remove_issuer, is_issuer_allowed must return false.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_after_remove_is_issuer_allowed_false() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+
+    client.initialize(&admin);
+    client.add_issuer(&issuer, &None, &None, &None);
+    client.remove_issuer(&issuer);
+
+    assert!(!client.is_issuer_allowed(&issuer));
+}
