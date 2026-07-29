@@ -66,7 +66,6 @@ impl VcRevocationRegistryContract {
             revoked_at: e.ledger().timestamp(),
         };
         storage::write_revocation(&e, &issuer, &credential_id, &record);
-        storage::extend_revocation_ttl(&e);
         events::credential_revoked(&e, &issuer, &credential_id);
     }
 
@@ -87,7 +86,6 @@ impl VcRevocationRegistryContract {
             panic_with_error!(&e, ContractError::CredentialNotFound);
         }
         storage::remove_revocation(&e, &issuer, &credential_id);
-        storage::extend_revocation_ttl(&e);
         events::credential_unrevoked(&e, &issuer, &credential_id);
     }
 

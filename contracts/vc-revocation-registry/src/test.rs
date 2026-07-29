@@ -1,13 +1,18 @@
 #![cfg(test)]
 
+extern crate std;
+
 use crate::contract::VcRevocationRegistryContract;
-use crate::error::ContractError;
-use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, Bytes, Env, String,
+};
 
 fn setup() -> (Env, Address, Address) {
     let e = Env::default();
-    let admin = Address::random(&e);
-    let contract_id = Address::random(&e);
+    e.ledger().set_timestamp(12_345);
+    let admin = Address::generate(&e);
+    let contract_id = e.register(VcRevocationRegistryContract, ());
     e.mock_all_auths();
     (e, contract_id, admin)
 }
@@ -44,7 +49,7 @@ fn test_revoke_and_is_revoked() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     assert!(!client.is_revoked(&issuer, &credential_id));
@@ -61,7 +66,7 @@ fn test_revoke_already_revoked() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     client.revoke(&issuer, &credential_id);
@@ -79,7 +84,7 @@ fn test_unrevoke() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     client.revoke(&issuer, &credential_id);
@@ -96,7 +101,7 @@ fn test_unrevoke_not_revoked() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -112,7 +117,7 @@ fn test_get_revocation() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     client.revoke(&issuer, &credential_id);
@@ -128,7 +133,7 @@ fn test_get_revocation_not_found() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -144,7 +149,7 @@ fn test_multiple_credentials_per_issuer() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let cred1 = Bytes::from_slice(&e, b"cred-1");
     let cred2 = Bytes::from_slice(&e, b"cred-2");
 
@@ -168,8 +173,8 @@ fn test_multiple_issuers_same_credential_id() {
 
     client.initialize(&admin);
 
-    let issuer1 = Address::random(&e);
-    let issuer2 = Address::random(&e);
+    let issuer1 = Address::generate(&e);
+    let issuer2 = Address::generate(&e);
     let cred_id = Bytes::from_slice(&e, b"cred-123");
 
     client.revoke(&issuer1, &cred_id);
@@ -186,7 +191,7 @@ fn test_revoke_not_initialized() {
     let (e, contract_id, _admin) = setup();
     let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-123");
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -213,9 +218,9 @@ fn test_invalid_credential_id() {
 
     client.initialize(&admin);
 
-    let issuer = Address::random(&e);
+    let issuer = Address::generate(&e);
     // Credential ID exceeds 256 bytes
-    let credential_id = Bytes::from_slice(&e, &vec![0u8; 257]);
+    let credential_id = Bytes::from_slice(&e, &[0u8; 257]);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.revoke(&issuer, &credential_id);

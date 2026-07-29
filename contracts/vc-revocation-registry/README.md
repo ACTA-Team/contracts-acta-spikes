@@ -89,8 +89,8 @@ After unrevoke:
 
 ```bash
 # from repo root
-cargo build -p vc-revocation-registry
-cargo test -p vc-revocation-registry
+cargo build -p vc-revocation-registry-contract
+cargo test -p vc-revocation-registry-contract
 
 # WASM
 stellar contract build

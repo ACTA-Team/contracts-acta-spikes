@@ -17,6 +17,7 @@ This repository contains various contract implementations, proof-of-concepts, an
 | Contract | Description |
 | -------- | ----------- |
 | [`vc-issuer-registry`](contracts/vc-issuer-registry/README.md) | On-chain allowlist and metadata registry for VC issuers |
+| [`vc-revocation-registry`](contracts/vc-revocation-registry/README.md) | On-chain credential revocation status tracking |
 | [`vc-schema-registry`](contracts/vc-schema-registry/README.md) | On-chain registry for Verifiable Credential schema definitions |
 
 ## Building
