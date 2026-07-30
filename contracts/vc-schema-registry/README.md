@@ -70,6 +70,23 @@ Deprecation is always **non-destructive**:
 
 Consumers are responsible for checking the `deprecated` flag and refusing to accept new credentials that reference a deprecated schema ID.
 
+## Definition storage
+
+**Decision (V1):** keep inline `definition: Bytes` with a **256-byte cap** (`MAX_DEFINITION_BYTES`).
+
+| Approach | Pros | Cons |
+| -------- | ---- | ---- |
+| **Inline bytes (V1)** | Simple API; `get_schema` is self-contained; no off-chain dependency for small payloads | 256 bytes cannot hold full JSON Schema documents; larger payloads increase read cost on every `get_schema` |
+| **Hash + off-chain URI (future)** | Small on-chain footprint; full schema at IPFS/HTTPS; hash enables integrity verification | Requires off-chain availability; API/record shape change; verifiers must fetch off-chain |
+
+The 256-byte limit aligns with `MAX_METADATA_BYTES` in `vc-issuer-registry` and `MAX_CREDENTIAL_ID_BYTES` in `vc-revocation-registry`. On-chain `definition` is intended as a **small canonical payload or digest placeholder**, not a full JSON Schema document. Authors with full schemas should store them off-chain and either register a compact hash/URI string within 256 bytes in V1, or wait for a future record shape (e.g. `definition_hash: BytesN<32>` + `definition_uri: Bytes`).
+
+`register_schema` rejects definitions longer than 256 bytes with `InvalidDefinition`.
+
+## Storage TTL
+
+Instance and persistent entry TTL is extended on **write paths only** (`initialize`, `register_schema`, `deprecate_schema`). Read-only entry points (`get_schema`, `schema_exists`, `admin`, `schema_id`, `version`) do not extend TTL or produce ledger writes.
+
 ## Error codes
 
 | Code | Variant             | Meaning                                              |
@@ -80,6 +97,7 @@ Consumers are responsible for checking the `deprecated` flag and refusing to acc
 | 4    | `NotInitialized`      | Contract not yet initialized                       |
 | 5    | `AlreadyDeprecated`   | Schema is already deprecated                       |
 | 6    | `Unauthorized`        | Caller is neither admin nor the schema author      |
+| 7    | `InvalidDefinition`   | Schema definition exceeds 256-byte limit           |
 
 ## Events
 
