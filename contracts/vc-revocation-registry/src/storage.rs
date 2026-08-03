@@ -1,22 +1,20 @@
 //! Storage layout and helpers.
 //! Instance storage  → admin (global config, low-frequency reads).
 //! Persistent storage → per-credential revocation records (long-lived, keyed by issuer + credential_id).
+//!
+//! Admin helpers and TTL constants are re-exported from `registry_core`.
+//! Contract-specific error codes start at 10 (1–9 are shared in `CommonError`).
 
+use registry_core;
 use soroban_sdk::{contracttype, Address, Bytes, Env};
 
-// TTL constants (~5 s ledger close): 518_400 ≈ 30 days, 3_110_400 ≈ 180 days.
-const INSTANCE_TTL_THRESHOLD: u32 = 518_400;
-const INSTANCE_TTL_EXTEND_TO: u32 = 3_110_400;
-const PERSISTENT_TTL_THRESHOLD: u32 = 518_400;
-const PERSISTENT_TTL_EXTEND_TO: u32 = 3_110_400;
-
 /// Storage keys separated by role (explicit role isolation).
+///
+/// Note: `Admin` is provided by `registry_core::DataKey::Admin` and is
+/// NOT duplicated here. This enum only adds contract-specific keys.
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    /// Global admin (singleton, instance storage)
-    Admin,
-
     /// Revocation record per (issuer, credential_id) pair (persistent storage).
     /// Composite key: (issuer Address, credential_id Bytes).
     Revocation(Address, Bytes),
@@ -30,22 +28,9 @@ pub struct RevocationRecord {
     pub revoked_at: u64,
 }
 
-// --- Admin (instance) ---
+// --- Admin (instance) — delegate to registry-core ---
 
-/// Check if admin has been initialized.
-pub fn has_admin(e: &Env) -> bool {
-    e.storage().instance().has(&DataKey::Admin)
-}
-
-/// Read the stored admin address.
-pub fn read_admin(e: &Env) -> Address {
-    e.storage().instance().get(&DataKey::Admin).unwrap()
-}
-
-/// Write the admin address to instance storage.
-pub fn write_admin(e: &Env, admin: &Address) {
-    e.storage().instance().set(&DataKey::Admin, admin);
-}
+pub use registry_core::{extend_instance_ttl, has_admin, read_admin, write_admin};
 
 // --- Revocation records (persistent) ---
 
@@ -63,16 +48,16 @@ pub fn read_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) -> Opti
         .get(&DataKey::Revocation(issuer.clone(), credential_id.clone()))
 }
 
-/// Write a revocation record.
+/// Write a revocation record and extend its TTL.
 pub fn write_revocation(
     e: &Env,
     issuer: &Address,
     credential_id: &Bytes,
     record: &RevocationRecord,
 ) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::Revocation(issuer.clone(), credential_id.clone()), record);
+    let key = DataKey::Revocation(issuer.clone(), credential_id.clone());
+    e.storage().persistent().set(&key, record);
+    registry_core::extend_persistent_ttl(e, &key);
 }
 
 /// Remove a revocation record (unrevoke).
@@ -80,20 +65,4 @@ pub fn remove_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) {
     e.storage()
         .persistent()
         .remove(&DataKey::Revocation(issuer.clone(), credential_id.clone()));
-}
-
-// --- TTL management ---
-
-/// Extend instance storage TTL to prevent admin record expiration.
-pub fn extend_instance_ttl(e: &Env) {
-    e.storage()
-        .instance()
-        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
-}
-
-/// Extend persistent storage TTL for a revocation record.
-pub fn extend_revocation_ttl(e: &Env) {
-    e.storage()
-        .persistent()
-        .extend_ttl(PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 }

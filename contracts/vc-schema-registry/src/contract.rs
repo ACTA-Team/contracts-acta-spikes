@@ -3,6 +3,7 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, SchemaRecord};
+use registry_core;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error,
     xdr::ToXdr,

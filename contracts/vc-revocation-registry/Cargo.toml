@@ -10,6 +10,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 soroban-sdk.workspace = true
+registry-core = { path = "../registry-core" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
