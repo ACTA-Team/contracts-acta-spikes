@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "contracts/did-stellar-registry",
+    "contracts/registry-core",
     "contracts/vc-issuer-registry",
     "contracts/vc-revocation-registry",
     "contracts/vc-schema-registry",

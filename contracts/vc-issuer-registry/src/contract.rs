@@ -49,7 +49,7 @@ impl VcIssuerRegistryContract {
         did: Option<Bytes>,
         url: Option<Bytes>,
     ) {
-        require_admin(&e);
+        registry_core::require_admin(&e);
         validate_metadata(&e, &did, &url);
         if storage::has_issuer(&e, &issuer) {
             panic_with_error!(&e, ContractError::IssuerAlreadyExists);
@@ -74,7 +74,7 @@ impl VcIssuerRegistryContract {
         did: Option<Bytes>,
         url: Option<Bytes>,
     ) {
-        require_admin(&e);
+        registry_core::require_admin(&e);
         validate_metadata(&e, &did, &url);
         let mut record = storage::read_issuer(&e, &issuer)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::IssuerNotFound));
@@ -88,7 +88,7 @@ impl VcIssuerRegistryContract {
 
     /// Set the `allowed` flag for an issuer (enable / disable without removing).
     pub fn set_issuer_allowed(e: Env, issuer: Address, allowed: bool) {
-        require_admin(&e);
+        registry_core::require_admin(&e);
         let mut record = storage::read_issuer(&e, &issuer)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::IssuerNotFound));
         record.allowed = allowed;
@@ -102,7 +102,7 @@ impl VcIssuerRegistryContract {
     /// `is_issuer_allowed` returns `false` and `get_issuer` panics with
     /// `IssuerNotFound`.
     pub fn remove_issuer(e: Env, issuer: Address) {
-        require_admin(&e);
+        registry_core::require_admin(&e);
         if !storage::has_issuer(&e, &issuer) {
             panic_with_error!(&e, ContractError::IssuerNotFound);
         }
@@ -145,16 +145,6 @@ impl VcIssuerRegistryContract {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/// Panics with `NotInitialized` if no admin is stored, or with a host auth
-/// error if the caller is not the stored admin.
-fn require_admin(e: &Env) {
-    if !storage::has_admin(e) {
-        panic_with_error!(e, ContractError::NotInitialized);
-    }
-    let admin = storage::read_admin(e);
-    admin.require_auth();
-}
 
 /// Validates metadata field sizes. Panics with `InvalidMetadata` if `did` or
 /// `url` exceeds [`MAX_METADATA_BYTES`].
