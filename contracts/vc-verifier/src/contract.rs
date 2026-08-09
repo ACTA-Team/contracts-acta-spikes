@@ -4,8 +4,8 @@ use crate::error::ContractError;
 use crate::events;
 use crate::storage;
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contractmeta, contracttype,
-    panic_with_error, Address, Bytes, BytesN, Env, Symbol,
+    contract, contractclient, contractimpl, contractmeta, contracttype, panic_with_error, Address,
+    Bytes, BytesN, Env, Symbol,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -153,10 +153,8 @@ impl VcVerifierContract {
             panic_with_error!(&e, ContractError::NotInitialized);
         }
 
-        let issuer_client =
-            IssuerRegistryClient::new(&e, &storage::read_issuer_registry(&e));
-        let schema_client =
-            SchemaRegistryClient::new(&e, &storage::read_schema_registry(&e));
+        let issuer_client = IssuerRegistryClient::new(&e, &storage::read_issuer_registry(&e));
+        let schema_client = SchemaRegistryClient::new(&e, &storage::read_schema_registry(&e));
         let revocation_client =
             RevocationRegistryClient::new(&e, &storage::read_revocation_registry(&e));
 

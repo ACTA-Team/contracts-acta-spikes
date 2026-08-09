@@ -33,7 +33,10 @@ pub fn write_admin(e: &Env, admin: &Address) {
 // --- Registry addresses ---
 
 pub fn read_issuer_registry(e: &Env) -> Address {
-    e.storage().instance().get(&DataKey::IssuerRegistry).unwrap()
+    e.storage()
+        .instance()
+        .get(&DataKey::IssuerRegistry)
+        .unwrap()
 }
 
 pub fn write_issuer_registry(e: &Env, addr: &Address) {
@@ -41,7 +44,10 @@ pub fn write_issuer_registry(e: &Env, addr: &Address) {
 }
 
 pub fn read_schema_registry(e: &Env) -> Address {
-    e.storage().instance().get(&DataKey::SchemaRegistry).unwrap()
+    e.storage()
+        .instance()
+        .get(&DataKey::SchemaRegistry)
+        .unwrap()
 }
 
 pub fn write_schema_registry(e: &Env, addr: &Address) {
@@ -49,11 +55,16 @@ pub fn write_schema_registry(e: &Env, addr: &Address) {
 }
 
 pub fn read_revocation_registry(e: &Env) -> Address {
-    e.storage().instance().get(&DataKey::RevocationRegistry).unwrap()
+    e.storage()
+        .instance()
+        .get(&DataKey::RevocationRegistry)
+        .unwrap()
 }
 
 pub fn write_revocation_registry(e: &Env, addr: &Address) {
-    e.storage().instance().set(&DataKey::RevocationRegistry, addr);
+    e.storage()
+        .instance()
+        .set(&DataKey::RevocationRegistry, addr);
 }
 
 // --- TTL ---

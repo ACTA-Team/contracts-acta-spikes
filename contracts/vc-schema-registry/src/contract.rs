@@ -4,9 +4,8 @@ use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, SchemaRecord};
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, panic_with_error,
-    xdr::ToXdr,
-    Address, Bytes, BytesN, Env, Symbol,
+    contract, contractimpl, contractmeta, panic_with_error, xdr::ToXdr, Address, Bytes, BytesN,
+    Env, Symbol,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -24,7 +23,6 @@ pub struct VcSchemaRegistryContract;
 
 #[contractimpl]
 impl VcSchemaRegistryContract {
-
     // -----------------------------------------------------------------------
     // Initialization
     // -----------------------------------------------------------------------
