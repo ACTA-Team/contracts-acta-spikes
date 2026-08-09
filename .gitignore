@@ -1,8 +1,8 @@
 **/target
-**/Cargo.lock
 tarpaulin-report.html
 **/test_snapshots/
 .soroban/
 **/fuzz/corpus/
 **/fuzz/artifacts/
+**/fuzz/Cargo.lock
 skills-lock.json

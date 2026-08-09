@@ -3,7 +3,6 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, IssuerRecord};
-use registry_core;
 use soroban_sdk::{
     contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env, Symbol,
 };
@@ -118,14 +117,12 @@ impl VcIssuerRegistryContract {
 
     /// Returns the full record for an issuer, or panics with IssuerNotFound.
     pub fn get_issuer(e: Env, issuer: Address) -> IssuerRecord {
-        storage::extend_instance_ttl(&e);
         storage::read_issuer(&e, &issuer)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::IssuerNotFound))
     }
 
     /// Returns true if the issuer is registered and currently allowed.
     pub fn is_issuer_allowed(e: Env, issuer: Address) -> bool {
-        storage::extend_instance_ttl(&e);
         storage::read_issuer(&e, &issuer)
             .map(|r| r.allowed)
             .unwrap_or(false)
@@ -136,7 +133,6 @@ impl VcIssuerRegistryContract {
         if !storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::NotInitialized);
         }
-        storage::extend_instance_ttl(&e);
         storage::read_admin(&e)
     }
 

@@ -1,0 +1,22 @@
+[package]
+name = "vc-issuer-registry-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-sdk = { version = "27.0.3", features = ["testutils"] }
+vc-issuer-registry-contract = { path = "..", features = ["testutils"] }
+
+# Prevent this fuzz crate from appearing in `cargo build` for the workspace
+[workspace]
+
+[[bin]]
+name = "fuzz_issuer_metadata"
+path = "fuzz_targets/fuzz_issuer_metadata.rs"
+test = false
+doc = false

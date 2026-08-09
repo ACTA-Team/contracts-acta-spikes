@@ -3,14 +3,15 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, SchemaRecord};
-use registry_core;
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, panic_with_error,
-    xdr::ToXdr,
-    Address, Bytes, BytesN, Env, Symbol,
+    contract, contractimpl, contractmeta, panic_with_error, xdr::ToXdr, Address, Bytes, BytesN,
+    Env, Symbol,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Maximum allowed byte length for schema definition payloads.
+const MAX_DEFINITION_BYTES: u32 = 256;
 
 contractmeta!(
     key = "Description",
@@ -22,7 +23,6 @@ pub struct VcSchemaRegistryContract;
 
 #[contractimpl]
 impl VcSchemaRegistryContract {
-
     // -----------------------------------------------------------------------
     // Initialization
     // -----------------------------------------------------------------------
@@ -63,6 +63,7 @@ impl VcSchemaRegistryContract {
             panic_with_error!(&e, ContractError::NotInitialized);
         }
         author.require_auth();
+        validate_definition(&e, &definition);
 
         let schema_id = compute_schema_id(&e, &author, &name, &version);
 
@@ -127,7 +128,6 @@ impl VcSchemaRegistryContract {
     /// Returns the full `SchemaRecord` for the given ID.
     /// Panics with `SchemaNotFound` if the ID is not in the registry.
     pub fn get_schema(e: Env, schema_id: BytesN<32>) -> SchemaRecord {
-        storage::extend_instance_ttl(&e);
         storage::read_schema(&e, &schema_id)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::SchemaNotFound))
     }
@@ -135,7 +135,6 @@ impl VcSchemaRegistryContract {
     /// Returns `true` if a schema with the given ID exists in the registry
     /// (regardless of its `deprecated` flag).
     pub fn schema_exists(e: Env, schema_id: BytesN<32>) -> bool {
-        storage::extend_instance_ttl(&e);
         storage::has_schema(&e, &schema_id)
     }
 
@@ -152,7 +151,6 @@ impl VcSchemaRegistryContract {
         if !storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::NotInitialized);
         }
-        storage::extend_instance_ttl(&e);
         storage::read_admin(&e)
     }
 
@@ -165,6 +163,14 @@ impl VcSchemaRegistryContract {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/// Validates definition field size. Panics with `InvalidDefinition` if
+/// `definition` exceeds [`MAX_DEFINITION_BYTES`].
+fn validate_definition(e: &Env, definition: &Bytes) {
+    if definition.len() > MAX_DEFINITION_BYTES {
+        panic_with_error!(e, ContractError::InvalidDefinition);
+    }
+}
 
 /// Computes `sha256(xdr(author) || xdr(name) || xdr(version))`.
 ///

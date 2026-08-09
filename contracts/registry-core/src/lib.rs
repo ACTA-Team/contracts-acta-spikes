@@ -28,7 +28,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contracttype, panic_with_error, Address, Bytes, Env};
+use soroban_sdk::{contracterror, contracttype, panic_with_error, Address, Bytes, Env};
 
 // ---------------------------------------------------------------------------
 // TTL constants (~5 s ledger close): 518_400 ≈ 30 days, 3_110_400 ≈ 180 days.
@@ -57,6 +57,7 @@ pub const DEFAULT_MAX_BYTES: u32 = 256;
 ///
 /// Contract-specific codes start at **10** to avoid collisions with the
 /// shared 1–9 range.
+#[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum CommonError {

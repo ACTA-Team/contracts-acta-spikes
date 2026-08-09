@@ -5,7 +5,6 @@
 //! Admin helpers and TTL constants are re-exported from `registry_core`.
 //! Contract-specific error codes start at 10 (1–9 are shared in `CommonError`).
 
-use registry_core;
 use soroban_sdk::{contracttype, Address, Bytes, Env, Symbol};
 
 /// Storage keys separated by role (explicit role isolation).
