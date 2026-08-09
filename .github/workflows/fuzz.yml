@@ -1,0 +1,64 @@
+name: Fuzz
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Bounded fuzz run
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - contract: vc-issuer-registry
+            target: fuzz_issuer_metadata
+          - contract: vc-schema-registry
+            target: fuzz_schema_id
+          - contract: vc-revocation-registry
+            target: fuzz_credential_id
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: fuzz-${{ matrix.contract }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            fuzz-${{ matrix.contract }}-
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Run ${{ matrix.target }} for 60 s
+        working-directory: contracts/${{ matrix.contract }}
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} \
+            --sanitizer none \
+            -- -max_total_time=60
+
+      - name: Upload crash artifacts (if any)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.contract }}-${{ matrix.target }}
+          path: contracts/${{ matrix.contract }}/fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore

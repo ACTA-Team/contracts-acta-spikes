@@ -15,3 +15,6 @@ pub mod storage;
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod proptest_schema_invariants;

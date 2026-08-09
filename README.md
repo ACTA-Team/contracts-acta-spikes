@@ -9,6 +9,7 @@ This repository contains various contract implementations, proof-of-concepts, an
 - `contracts/` - Individual contract implementations
   - `vc-issuer-registry` - Allowlist and metadata registry for VC issuers
   - `vc-revocation-registry` - Revocation status tracking for credentials
+  - `vc-schema-registry` - On-chain registry for Verifiable Credential schema definitions
 - `docs/` - Documentation and specifications
 - `scripts/` - Build and deployment utilities
 
@@ -17,13 +18,51 @@ This repository contains various contract implementations, proof-of-concepts, an
 | Contract | Description |
 | -------- | ----------- |
 | [`vc-issuer-registry`](contracts/vc-issuer-registry/README.md) | On-chain allowlist and metadata registry for VC issuers |
-| [`vc-revocation-registry`](contracts/vc-revocation-registry/README.md) | On-chain credential revocation status tracking |
+| [`vc-revocation-registry`](contracts/vc-revocation-registry/README.md) | Revocation status tracking for credentials |
 | [`vc-schema-registry`](contracts/vc-schema-registry/README.md) | On-chain registry for Verifiable Credential schema definitions |
 
 ## Building
 
+Build a single contract or all contracts in the workspace:
+
 ```bash
-./scripts/build.sh <contract-name>
+./scripts/build.sh vc-issuer-registry
+./scripts/build.sh                # build all contracts
+```
+
+The script derives the list of contracts from `contracts/*/`, so adding a new
+contract directory requires no script changes.
+
+**Target triple**: `wasm32-unknown-unknown`
+
+## Deploying
+
+```bash
+./scripts/deploy.sh <contract> <network> <source-account>
+```
+
+Examples:
+
+```bash
+./scripts/deploy.sh vc-issuer-registry testnet acta_deployer
+./scripts/deploy.sh vc-schema-registry testnet acta_deployer
+```
+
+The `CONTRACT_ADMIN` environment variable can be used to override the admin
+address for contract initialization (defaults to the source account address).
+
+## Release
+
+Build and deploy all contracts to testnet:
+
+```bash
+./scripts/release.sh
+```
+
+Or deploy a specific contract:
+
+```bash
+./scripts/release.sh vc-issuer-registry
 ```
 
 ## Testing
@@ -35,3 +74,4 @@ cargo test
 ## License
 
 Licensed under the [MIT License](./LICENSE).
+
