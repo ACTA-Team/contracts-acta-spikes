@@ -18,4 +18,6 @@ pub enum ContractError {
     AlreadyDeprecated = 5,
     /// Caller is neither the contract admin nor the schema author.
     Unauthorized = 6,
+    /// Schema definition exceeds the maximum allowed byte length.
+    InvalidDefinition = 7,
 }
