@@ -329,3 +329,27 @@ fn test_metadata_validation_boundary_ok() {
 
     assert!(client.is_issuer_allowed(&issuer));
 }
+
+// ---------------------------------------------------------------------------
+// test_is_issuer_allowed_is_read_only
+//   — Read-only getters must not extend instance TTL or write ledger entries.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_is_issuer_allowed_is_read_only() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.enable_invocation_metering();
+    let contract_id = e.register(VcIssuerRegistryContract, ());
+    let client = VcIssuerRegistryContractClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
+    client.initialize(&admin);
+    client.add_issuer(&issuer, &None, &None, &None);
+
+    client.is_issuer_allowed(&issuer);
+
+    let resources = e.cost_estimate().resources().unwrap();
+    assert_eq!(resources.write_entries, 0);
+    assert_eq!(resources.instance_entry_rent_bumps, 0);
+}
