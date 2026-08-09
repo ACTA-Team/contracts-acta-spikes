@@ -308,3 +308,29 @@ fn test_credential_ids_differing_only_in_trailing_bytes_are_independent() {
     assert!(client.is_revoked(&issuer, &cred_a));
     assert!(!client.is_revoked(&issuer, &cred_b));
 }
+
+// ---------------------------------------------------------------------------
+// test_is_revoked_is_read_only
+//   — Read-only getters must not extend instance TTL or write ledger entries.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_is_revoked_is_read_only() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.enable_invocation_metering();
+    let contract_id = e.register(VcRevocationRegistryContract, ());
+    let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
+
+    let admin = Address::random(&e);
+    let issuer = Address::random(&e);
+    let credential_id = Bytes::from_slice(&e, b"cred-001");
+
+    client.initialize(&admin);
+    client.revoke(&issuer, &credential_id);
+
+    client.is_revoked(&issuer, &credential_id);
+
+    let resources = e.cost_estimate().resources().unwrap();
+    assert_eq!(resources.write_entries, 0);
+    assert_eq!(resources.instance_entry_rent_bumps, 0);
+}

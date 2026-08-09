@@ -4,15 +4,15 @@ set -eu
 # Deploy a contract to a Stellar network.
 #
 # Usage:
-#   ./scripts/deploy.sh <package> <network> <source-account>
+#   ./scripts/deploy.sh <contract> <network> <source-account>
 #
-#   package:        vc-vault | did-stellar-registry
+#   contract:       one of the contracts in contracts/
 #   network:        testnet | mainnet
 #   source-account: stellar keys alias (e.g. acta_deployer)
 #
 # Examples:
-#   ./scripts/deploy.sh did-stellar-registry testnet acta_deployer
-#   ./scripts/deploy.sh vc-vault testnet acta_deployer
+#   ./scripts/deploy.sh vc-issuer-registry testnet acta_deployer
+#   ./scripts/deploy.sh vc-schema-registry testnet acta_deployer
 #
 # Prerequisites:
 #   - stellar-cli installed and configured
@@ -23,47 +23,69 @@ set -eu
 #   - Source account key generated:
 #       stellar keys generate acta_deployer --network <network>
 #   - WASM built:
-#       ./scripts/build.sh <package>
+#       ./scripts/build.sh <contract>
+#
+# Environment variables:
+#   CONTRACT_ADMIN  admin address for contract initialization (optional,
+#                   defaults to source account address)
 
-PACKAGE=${1:-}
+CONTRACT=${1:-}
 NETWORK=${2:-}
 SOURCE=${3:-}
 
-if [ -z "$PACKAGE" ] || [ -z "$NETWORK" ] || [ -z "$SOURCE" ]; then
-    echo "Usage: $0 <package> <network> <source-account>" >&2
-    echo "  package:  vc-vault | did-stellar-registry" >&2
-    echo "  network:  testnet | mainnet" >&2
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+CONTRACTS_DIR="$ROOT_DIR/contracts"
+WASM_TARGET=wasm32-unknown-unknown
+
+if [ -z "$CONTRACT" ] || [ -z "$NETWORK" ] || [ -z "$SOURCE" ]; then
+    # Build the list of available contracts from contracts/*/
+    available=""
+    if [ -d "$CONTRACTS_DIR" ]; then
+        for dir in "$CONTRACTS_DIR"/*/; do
+            [ -d "$dir" ] || continue
+            name="$(basename "$dir")"
+            available="$available $name"
+        done
+    fi
+    echo "Usage: $0 <contract> <network> <source-account>" >&2
+    echo "  contract:  one of:$available" >&2
+    echo "  network:   testnet | mainnet" >&2
     exit 1
 fi
 
-case "$PACKAGE" in
-    vc-vault)
-        WASM="target/wasm32v1-none/release/vc_vault_contract.optimized.wasm"
-        ADMIN=${VC_ADMIN:-$(stellar keys address "$SOURCE")}
-        CONSTRUCTOR_ARGS="-- --contract_admin $ADMIN"
-        ;;
-    did-stellar-registry)
-        WASM="target/wasm32v1-none/release/did_stellar_registry.optimized.wasm"
-        # Requires an admin address at construction.
-        # Defaults to the deployer address; override by setting DID_ADMIN env var.
-        ADMIN=${DID_ADMIN:-$(stellar keys address "$SOURCE")}
-        CONSTRUCTOR_ARGS="-- --admin $ADMIN"
-        ;;
-    *)
-        echo "Unknown package: $PACKAGE" >&2
-        echo "  package: vc-vault | did-stellar-registry" >&2
-        exit 1 ;;
-esac
+# Validate the contract exists in contracts/
+contract_dir="$CONTRACTS_DIR/$CONTRACT"
+if [ ! -d "$contract_dir" ]; then
+    echo "Unknown contract: $CONTRACT" >&2
+    echo "Available contracts:" >&2
+    if [ -d "$CONTRACTS_DIR" ]; then
+        for dir in "$CONTRACTS_DIR"/*/; do
+            [ -d "$dir" ] || continue
+            echo "  $(basename "$dir")" >&2
+        done
+    fi
+    exit 1
+fi
+
+cargo_toml="$contract_dir/Cargo.toml"
+pkg_name="$(grep '^name =' "$cargo_toml" | head -1 | sed 's/^name = "\(.*\)"$/\1/')"
+wasm_name="${pkg_name//-/_}.wasm"
+WASM="target/${WASM_TARGET}/release/${wasm_name}"
+
+ADMIN="${CONTRACT_ADMIN:-$(stellar keys address "$SOURCE")}"
+CONSTRUCTOR_ARGS="-- --admin $ADMIN"
 
 if [ ! -f "$WASM" ]; then
     echo "WASM not found: $WASM" >&2
-    echo "Run: ./scripts/build.sh $PACKAGE" >&2
+    echo "Run: ./scripts/build.sh $CONTRACT" >&2
     exit 1
 fi
 
-echo "Deploying $PACKAGE to $NETWORK..."
+echo "Deploying $CONTRACT to $NETWORK..."
 echo "  WASM: $WASM"
 echo "  Source: $SOURCE"
+echo "  Admin: $ADMIN"
 
 CONTRACT_ID=$(stellar contract deploy \
     --wasm "$WASM" \
@@ -76,4 +98,4 @@ echo "Contract ID: $CONTRACT_ID"
 echo ""
 echo "Add this entry to docs/deployments/$NETWORK.md:"
 echo ""
-echo "| $PACKAGE | $(date +%Y-%m-%d) | \`$CONTRACT_ID\` | $NETWORK |"
+echo "| $CONTRACT | $(date +%Y-%m-%d) | \`$CONTRACT_ID\` | $NETWORK |"
