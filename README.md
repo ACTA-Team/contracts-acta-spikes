@@ -33,7 +33,8 @@ Build a single contract or all contracts in the workspace:
 The script derives the list of contracts from `contracts/*/`, so adding a new
 contract directory requires no script changes.
 
-**Target triple**: `wasm32-unknown-unknown`
+**Target triple**: `wasm32v1-none` (soroban-sdk 27 does not support
+`wasm32-unknown-unknown` on Rust 1.82+)
 
 ## Deploying
 
