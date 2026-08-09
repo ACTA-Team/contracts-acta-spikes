@@ -323,3 +323,66 @@ fn test_deprecation_preserves_record() {
     // schema_exists returns true even for deprecated schemas
     assert!(client.schema_exists(&schema_id));
 }
+
+// ---------------------------------------------------------------------------
+// test_definition_too_long
+//   — Registering a definition exceeding 256 bytes must fail.
+// ---------------------------------------------------------------------------
+#[test]
+#[should_panic]
+fn test_definition_too_long() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let author = Address::generate(&e);
+    let name = Symbol::new(&e, "IdentitySchema");
+    let version = Symbol::new(&e, "v1");
+    let long_definition = Bytes::from_slice(&e, &[0u8; 257]);
+    client.register_schema(&author, &name, &version, &long_definition); // must panic
+}
+
+// ---------------------------------------------------------------------------
+// test_definition_boundary_ok
+//   — 256-byte definition should be accepted (boundary check).
+// ---------------------------------------------------------------------------
+#[test]
+fn test_definition_boundary_ok() {
+    let (e, client) = setup();
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let author = Address::generate(&e);
+    let name = Symbol::new(&e, "IdentitySchema");
+    let version = Symbol::new(&e, "v1");
+    let max_definition = Bytes::from_slice(&e, &[b'x'; 256]);
+    let schema_id = client.register_schema(&author, &name, &version, &max_definition);
+
+    assert!(client.schema_exists(&schema_id));
+    assert_eq!(client.get_schema(&schema_id).definition, max_definition);
+}
+
+// ---------------------------------------------------------------------------
+// test_schema_exists_is_read_only
+//   — Read-only getters must not extend instance TTL or write ledger entries.
+// ---------------------------------------------------------------------------
+#[test]
+fn test_schema_exists_is_read_only() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.enable_invocation_metering();
+    let contract_id = e.register(VcSchemaRegistryContract, ());
+    let client = VcSchemaRegistryContractClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let (author, name, version, definition) = sample_schema(&e);
+    let schema_id = client.register_schema(&author, &name, &version, &definition);
+
+    client.schema_exists(&schema_id);
+
+    let resources = e.cost_estimate().resources().unwrap();
+    assert_eq!(resources.write_entries, 0);
+    assert_eq!(resources.instance_entry_rent_bumps, 0);
+}
