@@ -2,13 +2,12 @@
 resolver = "2"
 
 members = [
+    "contracts/did-stellar-registry",
+    "contracts/registry-core",
     "contracts/vc-issuer-registry",
     "contracts/vc-revocation-registry",
     "contracts/vc-schema-registry",
-    "contracts/vc-revocation-registry",
     "contracts/vc-status-list",
-    "contracts/did-stellar-registry",
-    "contracts/vc-revocation-registry",
     "contracts/vc-verifier",
 ]
 
@@ -19,9 +18,7 @@ license = "MIT"
 repository = "https://github.com/ACTA-Team/contracts-acta-spikes"
 
 [workspace.dependencies]
-soroban-sdk = { version = "27.0" }
 soroban-sdk = { version = "27.0.3" }
-soroban-sdk = { version = "=23.4.0" }
 
 [profile.release]
 opt-level = "z"

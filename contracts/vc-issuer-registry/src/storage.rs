@@ -1,22 +1,19 @@
 //! Storage layout and helpers.
 //! Instance storage  → admin (global config, low-frequency reads).
 //! Persistent storage → per-issuer records (long-lived, keyed by Address).
+//!
+//! Admin helpers and TTL constants are re-exported from `registry_core`.
+//! Contract-specific error codes start at 10 (1–9 are shared in `CommonError`).
 
 use soroban_sdk::{contracttype, Address, Bytes, Env, Symbol};
 
-// TTL constants (~5 s ledger close): 518_400 ≈ 30 days, 3_110_400 ≈ 180 days.
-const INSTANCE_TTL_THRESHOLD: u32 = 518_400;
-const INSTANCE_TTL_EXTEND_TO: u32 = 3_110_400;
-const PERSISTENT_TTL_THRESHOLD: u32 = 518_400;
-const PERSISTENT_TTL_EXTEND_TO: u32 = 3_110_400;
-
 /// Storage keys separated by role (explicit role isolation).
+///
+/// Note: `Admin` is provided by `registry_core::DataKey::Admin` and is
+/// NOT duplicated here. This enum only adds contract-specific keys.
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    /// Global admin (singleton, instance storage)
-    Admin,
-
     /// Issuer registry (per-address persistent storage)
     Issuer(Address),
 }
@@ -35,19 +32,9 @@ pub struct IssuerRecord {
     pub url: Option<Bytes>,
 }
 
-// --- Admin (instance) ---
+// --- Admin (instance) — delegate to registry-core ---
 
-pub fn has_admin(e: &Env) -> bool {
-    e.storage().instance().has(&DataKey::Admin)
-}
-
-pub fn read_admin(e: &Env) -> Address {
-    e.storage().instance().get(&DataKey::Admin).unwrap()
-}
-
-pub fn write_admin(e: &Env, admin: &Address) {
-    e.storage().instance().set(&DataKey::Admin, admin);
-}
+pub use registry_core::{extend_instance_ttl, has_admin, read_admin, write_admin};
 
 // --- Issuer records (persistent) ---
 
@@ -66,21 +53,11 @@ pub fn read_issuer(e: &Env, issuer: &Address) -> Option<IssuerRecord> {
 pub fn write_issuer(e: &Env, issuer: &Address, record: &IssuerRecord) {
     let key = DataKey::Issuer(issuer.clone());
     e.storage().persistent().set(&key, record);
-    e.storage()
-        .persistent()
-        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+    registry_core::extend_persistent_ttl(e, &key);
 }
 
 pub fn remove_issuer(e: &Env, issuer: &Address) {
     e.storage()
         .persistent()
         .remove(&DataKey::Issuer(issuer.clone()));
-}
-
-// --- TTL helpers ---
-
-pub fn extend_instance_ttl(e: &Env) {
-    e.storage()
-        .instance()
-        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
 }

@@ -9,8 +9,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-soroban-sdk = { version = "23.4.0", features = ["testutils"] }
-vc-issuer-registry-contract = { path = ".." }
+soroban-sdk = { version = "27.0.3", features = ["testutils"] }
+vc-issuer-registry-contract = { path = "..", features = ["testutils"] }
 
 # Prevent this fuzz crate from appearing in `cargo build` for the workspace
 [workspace]

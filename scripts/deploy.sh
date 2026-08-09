@@ -36,7 +36,7 @@ SOURCE=${3:-}
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 CONTRACTS_DIR="$ROOT_DIR/contracts"
-WASM_TARGET=wasm32-unknown-unknown
+WASM_TARGET=wasm32v1-none
 
 if [ -z "$CONTRACT" ] || [ -z "$NETWORK" ] || [ -z "$SOURCE" ]; then
     # Build the list of available contracts from contracts/*/

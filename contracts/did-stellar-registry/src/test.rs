@@ -2,7 +2,10 @@
 
 extern crate std;
 
-use soroban_sdk::{testutils::Address as _, Address, Bytes, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, Bytes, Env,
+};
 
 use crate::contract::{DidStellarRegistryContract, DidStellarRegistryContractClient};
 

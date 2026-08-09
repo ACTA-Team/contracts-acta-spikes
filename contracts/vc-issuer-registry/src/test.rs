@@ -441,6 +441,9 @@ fn test_after_remove_is_issuer_allowed_false() {
     client.remove_issuer(&issuer);
 
     assert!(!client.is_issuer_allowed(&issuer));
+}
+
+// ---------------------------------------------------------------------------
 // test_is_issuer_allowed_is_read_only
 //   — Read-only getters must not extend instance TTL or write ledger entries.
 // ---------------------------------------------------------------------------
@@ -448,7 +451,6 @@ fn test_after_remove_is_issuer_allowed_false() {
 fn test_is_issuer_allowed_is_read_only() {
     let e = Env::default();
     e.mock_all_auths();
-    e.enable_invocation_metering();
     let contract_id = e.register(VcIssuerRegistryContract, ());
     let client = VcIssuerRegistryContractClient::new(&e, &contract_id);
 
@@ -459,7 +461,7 @@ fn test_is_issuer_allowed_is_read_only() {
 
     client.is_issuer_allowed(&issuer);
 
-    let resources = e.cost_estimate().resources().unwrap();
+    let resources = e.cost_estimate().resources();
     assert_eq!(resources.write_entries, 0);
-    assert_eq!(resources.instance_entry_rent_bumps, 0);
+    assert_eq!(resources.persistent_entry_rent_bumps, 0);
 }

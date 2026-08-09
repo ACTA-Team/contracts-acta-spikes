@@ -18,14 +18,19 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use soroban_sdk::{testutils::Address as _, Address, Bytes, Env};
-use vc_revocation_registry::contract::{
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, Bytes, Env,
+};
+use vc_revocation_registry_contract::contract::{
     VcRevocationRegistryContract, VcRevocationRegistryContractClient,
 };
 
 fuzz_target!(|data: &[u8]| {
     let e = Env::default();
     e.mock_all_auths();
+    // Default ledger timestamp is 0; `revoked_at > 0` below needs a real clock.
+    e.ledger().with_mut(|l| l.timestamp = 1_700_000_000);
     let contract_id = e.register(VcRevocationRegistryContract, ());
     let client = VcRevocationRegistryContractClient::new(&e, &contract_id);
 

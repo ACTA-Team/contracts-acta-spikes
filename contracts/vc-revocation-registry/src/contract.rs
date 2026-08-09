@@ -57,7 +57,7 @@ impl VcRevocationRegistryContract {
     /// * `CredentialAlreadyExists` - if the credential is already revoked
     /// * `InvalidCredentialId` - if credential_id exceeds max byte length
     pub fn revoke(e: Env, issuer: Address, credential_id: Bytes) {
-        require_admin(&e);
+        registry_core::require_admin(&e);
         validate_credential_id(&e, &credential_id);
         if storage::has_revocation(&e, &issuer, &credential_id) {
             panic_with_error!(&e, ContractError::CredentialAlreadyExists);
@@ -82,7 +82,7 @@ impl VcRevocationRegistryContract {
     /// * `NotInitialized` - if the contract has not been initialized
     /// * `CredentialNotFound` - if the credential is not revoked
     pub fn unrevoke(e: Env, issuer: Address, credential_id: Bytes) {
-        require_admin(&e);
+        registry_core::require_admin(&e);
         if !storage::has_revocation(&e, &issuer, &credential_id) {
             panic_with_error!(&e, ContractError::CredentialNotFound);
         }
@@ -149,16 +149,6 @@ impl VcRevocationRegistryContract {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/// Panics with `NotInitialized` if no admin is stored, or with a host auth
-/// error if the caller is not the stored admin.
-fn require_admin(e: &Env) {
-    if !storage::has_admin(e) {
-        panic_with_error!(e, ContractError::NotInitialized);
-    }
-    let admin = storage::read_admin(e);
-    admin.require_auth();
-}
 
 /// Validates credential ID field size. Panics with `InvalidCredentialId` if
 /// `credential_id` exceeds [`MAX_CREDENTIAL_ID_BYTES`].

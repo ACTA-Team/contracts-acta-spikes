@@ -3,11 +3,17 @@
 extern crate std;
 
 use crate::contract::{VcRevocationRegistryContract, VcRevocationRegistryContractClient};
-use soroban_sdk::{testutils::Address as _, Address, Bytes, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, Bytes, Env,
+};
 
 fn setup() -> (Env, VcRevocationRegistryContractClient<'static>) {
     let e = Env::default();
     e.mock_all_auths();
+    // Default ledger timestamp is 0; use a realistic close time so that
+    // `revoked_at` reflects an actual ledger clock.
+    e.ledger().with_mut(|l| l.timestamp = 1_700_000_000);
     let contract_id = e.register(VcRevocationRegistryContract, ());
     let client = VcRevocationRegistryContractClient::new(&e, &contract_id);
     (e, client)
@@ -317,12 +323,11 @@ fn test_credential_ids_differing_only_in_trailing_bytes_are_independent() {
 fn test_is_revoked_is_read_only() {
     let e = Env::default();
     e.mock_all_auths();
-    e.enable_invocation_metering();
     let contract_id = e.register(VcRevocationRegistryContract, ());
     let client = crate::contract::VcRevocationRegistryContractClient::new(&e, &contract_id);
 
-    let admin = Address::random(&e);
-    let issuer = Address::random(&e);
+    let admin = Address::generate(&e);
+    let issuer = Address::generate(&e);
     let credential_id = Bytes::from_slice(&e, b"cred-001");
 
     client.initialize(&admin);
@@ -330,7 +335,7 @@ fn test_is_revoked_is_read_only() {
 
     client.is_revoked(&issuer, &credential_id);
 
-    let resources = e.cost_estimate().resources().unwrap();
+    let resources = e.cost_estimate().resources();
     assert_eq!(resources.write_entries, 0);
-    assert_eq!(resources.instance_entry_rent_bumps, 0);
+    assert_eq!(resources.persistent_entry_rent_bumps, 0);
 }

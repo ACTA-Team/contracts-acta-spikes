@@ -4,12 +4,15 @@ extern crate std;
 
 use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, Symbol};
 
-use vc_issuer_registry_contract::VcIssuerRegistryContract;
-use vc_issuer_registry_contract::VcIssuerRegistryContractClient;
-use vc_revocation_registry_contract::VcRevocationRegistryContract;
-use vc_revocation_registry_contract::VcRevocationRegistryContractClient;
-use vc_schema_registry_contract::VcSchemaRegistryContract;
-use vc_schema_registry_contract::VcSchemaRegistryContractClient;
+use vc_issuer_registry_contract::contract::{
+    VcIssuerRegistryContract, VcIssuerRegistryContractClient,
+};
+use vc_revocation_registry_contract::contract::{
+    VcRevocationRegistryContract, VcRevocationRegistryContractClient,
+};
+use vc_schema_registry_contract::contract::{
+    VcSchemaRegistryContract, VcSchemaRegistryContractClient,
+};
 
 use crate::contract::{VcVerifierContract, VcVerifierContractClient};
 
