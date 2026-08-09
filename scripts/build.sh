@@ -7,11 +7,14 @@ set -eu
 #   ./scripts/build.sh                  # build all contracts
 #   ./scripts/build.sh vc-issuer-registry  # build a specific contract
 #
-# Output: target/wasm32-unknown-unknown/release/<name>.optimized.wasm
+# Output: target/wasm32v1-none/release/<name>.optimized.wasm
 #
-# Target triple: wasm32-unknown-unknown (settled in place of wasm32v1-none)
+# Target triple: wasm32v1-none. soroban-sdk 27 refuses to build for
+# wasm32-unknown-unknown on Rust 1.82+, where that target enables
+# reference-types and multi-value — features the Soroban environment does not
+# support and that cannot easily be turned off.
 
-WASM_TARGET=wasm32-unknown-unknown
+WASM_TARGET=wasm32v1-none
 
 SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
