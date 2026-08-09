@@ -57,22 +57,28 @@ pub fn has_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) -> bool 
 }
 
 /// Read a revocation record.
-pub fn read_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) -> Option<RevocationRecord> {
+pub fn read_revocation(
+    e: &Env,
+    issuer: &Address,
+    credential_id: &Bytes,
+) -> Option<RevocationRecord> {
     e.storage()
         .persistent()
         .get(&DataKey::Revocation(issuer.clone(), credential_id.clone()))
 }
 
-/// Write a revocation record.
+/// Write a revocation record and extend its TTL.
 pub fn write_revocation(
     e: &Env,
     issuer: &Address,
     credential_id: &Bytes,
     record: &RevocationRecord,
 ) {
+    let key = DataKey::Revocation(issuer.clone(), credential_id.clone());
+    e.storage().persistent().set(&key, record);
     e.storage()
         .persistent()
-        .set(&DataKey::Revocation(issuer.clone(), credential_id.clone()), record);
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 }
 
 /// Remove a revocation record (unrevoke).
@@ -89,11 +95,4 @@ pub fn extend_instance_ttl(e: &Env) {
     e.storage()
         .instance()
         .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
-}
-
-/// Extend persistent storage TTL for a revocation record.
-pub fn extend_revocation_ttl(e: &Env) {
-    e.storage()
-        .persistent()
-        .extend_ttl(PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 }

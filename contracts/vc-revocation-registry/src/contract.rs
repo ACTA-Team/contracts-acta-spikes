@@ -66,7 +66,7 @@ impl VcRevocationRegistryContract {
             revoked_at: e.ledger().timestamp(),
         };
         storage::write_revocation(&e, &issuer, &credential_id, &record);
-        storage::extend_revocation_ttl(&e);
+        storage::extend_instance_ttl(&e);
         events::credential_revoked(&e, &issuer, &credential_id);
     }
 
@@ -87,7 +87,7 @@ impl VcRevocationRegistryContract {
             panic_with_error!(&e, ContractError::CredentialNotFound);
         }
         storage::remove_revocation(&e, &issuer, &credential_id);
-        storage::extend_revocation_ttl(&e);
+        storage::extend_instance_ttl(&e);
         events::credential_unrevoked(&e, &issuer, &credential_id);
     }
 
@@ -104,7 +104,6 @@ impl VcRevocationRegistryContract {
     /// # Returns
     /// `true` if the credential is revoked, `false` otherwise
     pub fn is_revoked(e: Env, issuer: Address, credential_id: Bytes) -> bool {
-        storage::extend_instance_ttl(&e);
         storage::has_revocation(&e, &issuer, &credential_id)
     }
 
@@ -120,7 +119,6 @@ impl VcRevocationRegistryContract {
     /// # Errors
     /// * `CredentialNotFound` - if the credential is not revoked
     pub fn get_revocation(e: Env, issuer: Address, credential_id: Bytes) -> RevocationRecord {
-        storage::extend_instance_ttl(&e);
         storage::read_revocation(&e, &issuer, &credential_id)
             .unwrap_or_else(|| panic_with_error!(&e, ContractError::CredentialNotFound))
     }
@@ -136,7 +134,6 @@ impl VcRevocationRegistryContract {
         if !storage::has_admin(&e) {
             panic_with_error!(&e, ContractError::NotInitialized);
         }
-        storage::extend_instance_ttl(&e);
         storage::read_admin(&e)
     }
 
