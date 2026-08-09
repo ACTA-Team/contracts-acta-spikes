@@ -6,10 +6,10 @@ use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, Symbol};
 
 use vc_issuer_registry_contract::VcIssuerRegistryContract;
 use vc_issuer_registry_contract::VcIssuerRegistryContractClient;
-use vc_schema_registry_contract::VcSchemaRegistryContract;
-use vc_schema_registry_contract::VcSchemaRegistryContractClient;
 use vc_revocation_registry_contract::VcRevocationRegistryContract;
 use vc_revocation_registry_contract::VcRevocationRegistryContractClient;
+use vc_schema_registry_contract::VcSchemaRegistryContract;
+use vc_schema_registry_contract::VcSchemaRegistryContractClient;
 
 use crate::contract::{VcVerifierContract, VcVerifierContractClient};
 
@@ -66,7 +66,8 @@ fn setup() -> TestEnv<'static> {
 
 /// Register the issuer in the issuer registry and a schema, return the schema_id.
 fn register_issuer_and_schema(ctx: &TestEnv) -> BytesN<32> {
-    ctx.issuer_client.add_issuer(&ctx.issuer, &None, &None, &None);
+    ctx.issuer_client
+        .add_issuer(&ctx.issuer, &None, &None, &None);
     ctx.schema_client.register_schema(
         &ctx.issuer,
         &Symbol::new(&ctx.e, "TestSchema"),
@@ -142,7 +143,8 @@ fn test_unknown_issuer() {
 #[test]
 fn test_unknown_schema() {
     let ctx = setup();
-    ctx.issuer_client.add_issuer(&ctx.issuer, &None, &None, &None);
+    ctx.issuer_client
+        .add_issuer(&ctx.issuer, &None, &None, &None);
     let cred_id = credential_id(&ctx.e);
 
     let unknown_schema: BytesN<32> = BytesN::from_array(&ctx.e, &[0u8; 32]);

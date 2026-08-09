@@ -39,15 +39,11 @@ pub struct DidRecord {
 // --- DID records (persistent) ---
 
 pub fn has_did(e: &Env, did_id: &BytesN<32>) -> bool {
-    e.storage()
-        .persistent()
-        .has(&DataKey::Did(did_id.clone()))
+    e.storage().persistent().has(&DataKey::Did(did_id.clone()))
 }
 
 pub fn read_did(e: &Env, did_id: &BytesN<32>) -> Option<DidRecord> {
-    e.storage()
-        .persistent()
-        .get(&DataKey::Did(did_id.clone()))
+    e.storage().persistent().get(&DataKey::Did(did_id.clone()))
 }
 
 pub fn write_did(e: &Env, did_id: &BytesN<32>, record: &DidRecord) {

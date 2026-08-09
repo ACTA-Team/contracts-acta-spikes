@@ -57,7 +57,11 @@ pub fn has_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) -> bool 
 }
 
 /// Read a revocation record.
-pub fn read_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) -> Option<RevocationRecord> {
+pub fn read_revocation(
+    e: &Env,
+    issuer: &Address,
+    credential_id: &Bytes,
+) -> Option<RevocationRecord> {
     e.storage()
         .persistent()
         .get(&DataKey::Revocation(issuer.clone(), credential_id.clone()))

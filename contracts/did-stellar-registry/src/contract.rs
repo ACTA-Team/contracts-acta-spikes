@@ -4,9 +4,7 @@ use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, DidRecord};
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, panic_with_error,
-    xdr::ToXdr,
-    Address, Bytes, BytesN, Env,
+    contract, contractimpl, contractmeta, panic_with_error, xdr::ToXdr, Address, Bytes, BytesN, Env,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -26,7 +24,6 @@ pub struct DidStellarRegistryContract;
 
 #[contractimpl]
 impl DidStellarRegistryContract {
-
     // -----------------------------------------------------------------------
     // Write operations (controller-only, no admin)
     // -----------------------------------------------------------------------

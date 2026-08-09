@@ -73,7 +73,10 @@ fn test_update_bumps_version_and_timestamp() {
     let before = client.resolve(&did);
 
     e.ledger().with_mut(|l| l.timestamp = 200);
-    let new_doc = Bytes::from_slice(&e, br#"{"@context":"https://www.w3.org/ns/did/v1","id":"did:stellar:updated"}"#);
+    let new_doc = Bytes::from_slice(
+        &e,
+        br#"{"@context":"https://www.w3.org/ns/did/v1","id":"did:stellar:updated"}"#,
+    );
     client.update(&controller, &new_doc);
 
     let after = client.resolve(&did);
