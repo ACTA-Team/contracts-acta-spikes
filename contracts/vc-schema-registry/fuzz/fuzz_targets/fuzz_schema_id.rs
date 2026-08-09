@@ -8,6 +8,7 @@
 //! - The ID returned by `register_schema` matches the ID returned by
 //!   `schema_id()` for the same triple.
 //! - Registering the same triple twice results in `SchemaAlreadyExists`.
+//! - A definition over 256 bytes is rejected with `InvalidDefinition`.
 //!
 //! The fuzzer uses the first 9 bytes of the input as the `name` Symbol and
 //! the next 9 bytes as the `version` Symbol (trimmed to ASCII alphanumeric
@@ -27,6 +28,10 @@ use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, Symbol};
 use vc_schema_registry_contract::contract::{
     VcSchemaRegistryContract, VcSchemaRegistryContractClient,
 };
+
+/// Maximum definition size accepted by `register_schema`; must match
+/// `MAX_DEFINITION_BYTES` in the contract.
+const MAX_DEFINITION_BYTES: u32 = 256;
 
 /// Build a valid Soroban Symbol from raw bytes by keeping only ASCII
 /// alphanumeric characters and underscores, then truncating to 9 chars.
@@ -84,6 +89,19 @@ fuzz_target!(|data: &[u8]| {
     // Re-computing must produce the same result (determinism).
     let computed_id2 = client.schema_id(&author, &name, &version);
     assert_eq!(computed_id, computed_id2, "schema_id must be deterministic");
+
+    // The remaining input feeds the definition, which is bounded at 256 bytes.
+    // Anything longer must be rejected rather than registered.
+    if definition.len() > MAX_DEFINITION_BYTES {
+        let oversize = client.try_register_schema(&author, &name, &version, &definition);
+        assert!(
+            oversize.is_err(),
+            "register_schema must reject a definition of {} bytes (> {})",
+            definition.len(),
+            MAX_DEFINITION_BYTES
+        );
+        return;
+    }
 
     // Register the schema.
     let registered_id = client.register_schema(&author, &name, &version, &definition);
