@@ -5,6 +5,7 @@ members = [
     "contracts/vc-issuer-registry",
     "contracts/vc-revocation-registry",
     "contracts/vc-schema-registry",
+    "contracts/vc-revocation-registry",
     "contracts/vc-status-list",
     "contracts/did-stellar-registry",
     "contracts/vc-revocation-registry",

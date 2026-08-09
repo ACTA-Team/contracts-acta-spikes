@@ -1,20 +1,23 @@
-# vc-vault — Installation, Build & Deployment
+# Fuzzing Setup
+
+This document describes how to install, build, and run the `cargo-fuzz` targets
+that live under `contracts/*/fuzz/`.
+
+---
 
 ## Prerequisites
 
 | Tool | Version | Install |
 |---|---|---|
-| Rust | stable + nightly | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| Stellar CLI | ≥ 21.0.0 | `cargo install --locked stellar-cli` |
+| Rust (stable) | stable | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| Rust (nightly) | nightly | `rustup toolchain install nightly` |
 | cargo-fuzz | latest | `cargo install cargo-fuzz` |
-| wasm32v1-none target | — | `rustup target add wasm32v1-none` |
-| nightly toolchain | — | `rustup toolchain install nightly` |
 
 Verify:
 
 ```sh
 rustc --version
-stellar --version
+rustup run nightly rustc --version
 cargo fuzz --version
 ```
 
@@ -22,100 +25,133 @@ cargo fuzz --version
 
 ## Repository layout
 
+Each contract that has a fuzz suite contains a `fuzz/` sub-crate:
+
 ```
 contracts/
-  vc-vault/
-    src/           Contract source
-    fuzz/          Fuzz targets (cargo-fuzz workspace)
-    Cargo.toml
-docs/
-scripts/
-  build.sh         Build + optimize WASM
-  release.sh       Deploy to testnet
-Cargo.toml         Workspace root
+  vc-issuer-registry/
+    fuzz/
+      Cargo.toml                         # Isolated fuzz workspace
+      fuzz_targets/
+        fuzz_issuer_metadata.rs          # Drives add_issuer / set_issuer_metadata
+  vc-schema-registry/
+    fuzz/
+      Cargo.toml
+      fuzz_targets/
+        fuzz_schema_id.rs                # Drives schema_id derivation + registration
+  vc-revocation-registry/
+    fuzz/
+      Cargo.toml
+      fuzz_targets/
+        fuzz_credential_id.rs            # Drives revoke / unrevoke with arbitrary IDs
+```
+
+Each `fuzz/` directory is its own Cargo workspace (`[workspace]`) so it is
+excluded from the root workspace and never pulled into the normal `cargo build`.
+
+---
+
+## Running fuzz targets
+
+### vc-issuer-registry — `fuzz_issuer_metadata`
+
+Exercises `add_issuer` and `set_issuer_metadata` with arbitrary `did` / `url`
+byte payloads. Asserts:
+
+- Payloads ≤ 256 bytes are always accepted.
+- Payloads > 256 bytes are always rejected.
+- `is_issuer_allowed` is `true` immediately after a successful `add_issuer`.
+- `get_issuer` returns the stored record without panicking.
+
+```sh
+cd contracts/vc-issuer-registry
+cargo +nightly fuzz run fuzz_issuer_metadata --sanitizer none
+```
+
+To run for a bounded time (e.g. 60 seconds, as used in CI):
+
+```sh
+cargo +nightly fuzz run fuzz_issuer_metadata --sanitizer none -- -max_total_time=60
+```
+
+### vc-schema-registry — `fuzz_schema_id`
+
+Exercises `register_schema` and `schema_id` with arbitrary `(name, version)`
+inputs. Asserts:
+
+- `schema_id()` is deterministic for the same triple.
+- The ID from `register_schema` matches `schema_id()`.
+- Duplicate registrations are rejected.
+
+```sh
+cd contracts/vc-schema-registry
+cargo +nightly fuzz run fuzz_schema_id --sanitizer none
+```
+
+Bounded run:
+
+```sh
+cargo +nightly fuzz run fuzz_schema_id --sanitizer none -- -max_total_time=60
+```
+
+### vc-revocation-registry — `fuzz_credential_id`
+
+Exercises `revoke` / `unrevoke` with arbitrary credential-ID byte payloads.
+Asserts:
+
+- IDs ≤ 256 bytes are always accepted.
+- IDs > 256 bytes are always rejected.
+- Revoke → unrevoke → revoke round-trips work correctly.
+
+```sh
+cd contracts/vc-revocation-registry
+cargo +nightly fuzz run fuzz_credential_id --sanitizer none
+```
+
+Bounded run:
+
+```sh
+cargo +nightly fuzz run fuzz_credential_id --sanitizer none -- -max_total_time=60
 ```
 
 ---
 
-## Building
+## Why `--sanitizer none`?
 
-### Debug build (fast, for development)
-
-```sh
-cargo build -p vc-vault-contract
-```
-
-### Release WASM (for deployment)
-
-```sh
-sh scripts/build.sh
-```
-
-Outputs:
-- `target/wasm32v1-none/release/vc_vault_contract.wasm` — unoptimized
-- `target/wasm32v1-none/release/vc_vault_contract.optimized.wasm` — optimized (deploy this one)
-
-The build script uses `cargo rustc -- --crate-type cdylib` to force cdylib output for the WASM build without declaring it in `Cargo.toml`. This is required because declaring `cdylib` in `Cargo.toml` would cause cargo to build a native `.dylib` during fuzzing, which fails to link sancov symbols on macOS. The script runs `set -eu` so it will fail fast on any error. Never deploy a stale artifact.
+Soroban contracts use `#![no_std]`. On many platforms AddressSanitizer (ASAN)
+fails because `no_std` lacks the expected sanitizer initialization
+infrastructure. Because contracts run in a WASM sandbox with no raw memory
+access, memory-safety bugs are not the primary fuzzing target — **logic bugs
+are**. Coverage-guided fuzzing without ASAN is fully effective for invariant
+checking.
 
 ---
 
-## Running tests
+## Replaying a crash
+
+Crash inputs are saved to `fuzz/artifacts/<target>/`. To replay a specific
+crash:
 
 ```sh
-cargo test -p vc-vault-contract
-```
-
-Expected output: **54 tests, 0 failures, 0 warnings**.
-
-The test suite includes:
-- 49 functional tests covering the full VC lifecycle, issuer management, sponsored vaults, fee config, migration, and push-related regression cases.
-- 5 targeted authorization tests (`setup_no_mock`) that verify `require_auth()` guards are enforced and would catch regressions if a guard is accidentally removed.
-
----
-
-## Running the fuzz suite
-
-Fuzz targets require nightly Rust and live under `contracts/vc-vault/fuzz/`.
-
-```sh
-cd contracts/vc-vault
-
-# Run the lifecycle fuzzer (recommended starting point)
-cargo +nightly fuzz run fuzz_lifecycle --sanitizer none
-
-# Run a specific focused fuzzer
-cargo +nightly fuzz run fuzz_issue --sanitizer none
-cargo +nightly fuzz run fuzz_revoke --sanitizer none
-cargo +nightly fuzz run fuzz_verify_vc --sanitizer none
-cargo +nightly fuzz run fuzz_push --sanitizer none
-cargo +nightly fuzz run fuzz_issuer_ops --sanitizer none
-```
-
-> **Why `--sanitizer none`?** Soroban contracts use `#![no_std]`. On macOS aarch64, AddressSanitizer (ASAN) fails because `no_std` lacks the expected sanitizer init infrastructure. Since contracts run in a WASM sandbox with no raw memory access, memory safety bugs are not the fuzzing target — logic bugs are. Coverage-guided fuzzing without ASAN is fully effective for invariant checking.
-
-To stop a fuzzer: `Ctrl+C`. Crash inputs are saved to `fuzz/artifacts/<target>/`.
-
-To replay a crash:
-
-```sh
-cargo +nightly fuzz run fuzz_lifecycle --sanitizer none fuzz/artifacts/fuzz_lifecycle/<crash-file>
+# Example: replay a crash in fuzz_issuer_metadata
+cd contracts/vc-issuer-registry
+cargo +nightly fuzz run fuzz_issuer_metadata --sanitizer none \
+    fuzz/artifacts/fuzz_issuer_metadata/<crash-file>
 ```
 
 ---
 
-## Deploying to testnet
+## Full campaign (manual / nightly)
+
+Remove the `-max_total_time` flag to run indefinitely:
 
 ```sh
-sh scripts/release.sh
+cd contracts/vc-issuer-registry
+cargo +nightly fuzz run fuzz_issuer_metadata --sanitizer none
 ```
 
-The script:
-1. Adds the `testnet` network config if not already present (idempotent).
-2. Generates the `vc_vault_admin` keypair if not already present (idempotent).
-3. Runs `scripts/build.sh` to produce a fresh optimized WASM.
-4. Deploys with `stellar contract deploy` and prints the contract ID.
-
-The script uses `set -eu` — any failure stops execution immediately.
+Corpus entries that improve coverage are written to
+`fuzz/corpus/<target>/` (excluded from git via `.gitignore`).
 
 ---
 
@@ -123,7 +159,7 @@ The script uses `set -eu` — any failure stops execution immediately.
 
 | Error | Cause | Fix |
 |---|---|---|
-| `error: the option Z is only accepted on the nightly compiler` | Running `cargo fuzz` without nightly | Add `+nightly` or `rustup override set nightly` in `contracts/vc-vault/` |
+| `error: the option Z is only accepted on the nightly compiler` | Running `cargo fuzz` without nightly | Add `+nightly` or `rustup override set nightly` in the contract directory |
 | `Undefined symbols: ___sanitizer_cov_*` | ASAN + `no_std` on macOS aarch64 | Add `--sanitizer none` |
 | `error: no such command: fuzz` | cargo-fuzz not installed | `cargo install cargo-fuzz` |
-| `wasm32v1-none target not found` | Missing WASM target | `rustup target add wasm32v1-none` |
+| `error[E0463]: can't find crate for 'std'` | Building fuzz target with wrong target triple | Ensure you run from the contract's directory, not the workspace root |

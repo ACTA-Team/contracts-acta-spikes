@@ -13,3 +13,6 @@ pub mod storage;
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod proptest_state_machine;
