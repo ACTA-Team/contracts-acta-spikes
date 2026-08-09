@@ -18,6 +18,7 @@ license = "MIT"
 repository = "https://github.com/ACTA-Team/contracts-acta-spikes"
 
 [workspace.dependencies]
+soroban-sdk = { version = "27.0" }
 soroban-sdk = { version = "27.0.3" }
 soroban-sdk = { version = "=23.4.0" }
 
