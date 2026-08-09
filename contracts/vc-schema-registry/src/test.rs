@@ -370,7 +370,6 @@ fn test_definition_boundary_ok() {
 fn test_schema_exists_is_read_only() {
     let e = Env::default();
     e.mock_all_auths();
-    e.enable_invocation_metering();
     let contract_id = e.register(VcSchemaRegistryContract, ());
     let client = VcSchemaRegistryContractClient::new(&e, &contract_id);
 
@@ -382,7 +381,7 @@ fn test_schema_exists_is_read_only() {
 
     client.schema_exists(&schema_id);
 
-    let resources = e.cost_estimate().resources().unwrap();
+    let resources = e.cost_estimate().resources();
     assert_eq!(resources.write_entries, 0);
-    assert_eq!(resources.instance_entry_rent_bumps, 0);
+    assert_eq!(resources.persistent_entry_rent_bumps, 0);
 }

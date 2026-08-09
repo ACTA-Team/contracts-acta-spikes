@@ -77,13 +77,7 @@ pub fn read_chunk(e: &Env, issuer: &Address, list_id: &Symbol, chunk_idx: u32) -
 }
 
 /// Write a chunk of the bitmap and extend its TTL.
-pub fn write_chunk(
-    e: &Env,
-    issuer: &Address,
-    list_id: &Symbol,
-    chunk_idx: u32,
-    data: &Bytes,
-) {
+pub fn write_chunk(e: &Env, issuer: &Address, list_id: &Symbol, chunk_idx: u32, data: &Bytes) {
     let key = DataKey::Chunk(issuer.clone(), list_id.clone(), chunk_idx);
     e.storage().persistent().set(&key, data);
     e.storage()
@@ -108,6 +102,6 @@ pub fn byte_in_chunk(bit_index: u32) -> u32 {
 /// Compute the number of chunks needed for a given size in bits.
 #[inline]
 pub fn num_chunks(size: u32) -> u32 {
-    let total_bytes = (size + 7) / 8; // round up to whole bytes
-    (total_bytes + CHUNK_SIZE - 1) / CHUNK_SIZE
+    let total_bytes = size.div_ceil(8); // round up to whole bytes
+    total_bytes.div_ceil(CHUNK_SIZE)
 }

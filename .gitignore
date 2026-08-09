@@ -4,4 +4,5 @@ tarpaulin-report.html
 .soroban/
 **/fuzz/corpus/
 **/fuzz/artifacts/
+**/fuzz/Cargo.lock
 skills-lock.json

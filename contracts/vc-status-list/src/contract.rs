@@ -8,8 +8,7 @@ use crate::error::ContractError;
 use crate::events;
 use crate::storage::{self, ListMetadata};
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env, Symbol,
-    Vec,
+    contract, contractimpl, contractmeta, panic_with_error, Address, Bytes, Env, Symbol, Vec,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -82,13 +81,7 @@ impl VcStatusListContract {
     /// # Errors
     /// * `ListNotFound` - if no list exists for `(issuer, list_id)`.
     /// * `IndexOutOfRange` - if `index >= list.size`.
-    pub fn set_status(
-        e: Env,
-        issuer: Address,
-        list_id: Symbol,
-        index: u32,
-        revoked: bool,
-    ) {
+    pub fn set_status(e: Env, issuer: Address, list_id: Symbol, index: u32, revoked: bool) {
         issuer.require_auth();
         let meta = require_list(&e, &issuer, &list_id);
 

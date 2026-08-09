@@ -2,7 +2,7 @@
 //! Instance storage  → admin (global config, low-frequency reads).
 //! Persistent storage → per-credential revocation records (long-lived, keyed by issuer + credential_id).
 
-use soroban_sdk::{contracttype, Address, Bytes, Env};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env};
 
 // TTL constants (~5 s ledger close): 518_400 ≈ 30 days, 3_110_400 ≈ 180 days.
 const INSTANCE_TTL_THRESHOLD: u32 = 518_400;
@@ -18,8 +18,16 @@ pub enum DataKey {
     Admin,
 
     /// Revocation record per (issuer, credential_id) pair (persistent storage).
-    /// Composite key: (issuer Address, credential_id Bytes).
-    Revocation(Address, Bytes),
+    /// The credential ID is stored as its SHA-256 digest rather than raw bytes:
+    /// credential IDs may be up to 256 bytes, but a Soroban ledger key is capped
+    /// at 250 bytes, so embedding them raw makes long IDs unusable on-chain.
+    /// Hashing keeps the key constant-size while preserving uniqueness.
+    Revocation(Address, BytesN<32>),
+}
+
+/// Build the persistent storage key for a revocation record.
+fn revocation_key(e: &Env, issuer: &Address, credential_id: &Bytes) -> DataKey {
+    DataKey::Revocation(issuer.clone(), e.crypto().sha256(credential_id).to_bytes())
 }
 
 /// On-chain marker indicating a revoked credential.
@@ -53,7 +61,7 @@ pub fn write_admin(e: &Env, admin: &Address) {
 pub fn has_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) -> bool {
     e.storage()
         .persistent()
-        .has(&DataKey::Revocation(issuer.clone(), credential_id.clone()))
+        .has(&revocation_key(e, issuer, credential_id))
 }
 
 /// Read a revocation record.
@@ -64,7 +72,7 @@ pub fn read_revocation(
 ) -> Option<RevocationRecord> {
     e.storage()
         .persistent()
-        .get(&DataKey::Revocation(issuer.clone(), credential_id.clone()))
+        .get(&revocation_key(e, issuer, credential_id))
 }
 
 /// Write a revocation record and extend its TTL.
@@ -74,7 +82,7 @@ pub fn write_revocation(
     credential_id: &Bytes,
     record: &RevocationRecord,
 ) {
-    let key = DataKey::Revocation(issuer.clone(), credential_id.clone());
+    let key = revocation_key(e, issuer, credential_id);
     e.storage().persistent().set(&key, record);
     e.storage()
         .persistent()
@@ -85,7 +93,7 @@ pub fn write_revocation(
 pub fn remove_revocation(e: &Env, issuer: &Address, credential_id: &Bytes) {
     e.storage()
         .persistent()
-        .remove(&DataKey::Revocation(issuer.clone(), credential_id.clone()));
+        .remove(&revocation_key(e, issuer, credential_id));
 }
 
 // --- TTL management ---

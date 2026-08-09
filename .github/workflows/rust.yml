@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   format:
     name: Format Check
@@ -87,9 +91,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      # soroban-sdk 27 rejects wasm32-unknown-unknown on Rust 1.82+ (reference-types,
+      # multi-value are unsupported by the Soroban environment); wasm32v1-none is the
+      # supported target from Rust 1.84 on.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32v1-none
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -110,25 +117,31 @@ jobs:
           key: ${{ runner.os }}-cargo-build-wasm-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build WASM (release)
-        run: cargo build --locked --target wasm32-unknown-unknown --release --verbose
-      
+        run: cargo build --locked --target wasm32v1-none --release --verbose
+
       - name: Install stellar-cli
         run: npm install -g @stellar/stellar-cli
-      
+
+      # Only cdylib crates emit a .wasm; the rlib-only registries are linked into
+      # their consumers and produce no artifact here.
       - name: Optimize WASM contracts
         run: |
-          for contract in contracts/*/target/wasm32-unknown-unknown/release/*.wasm; do
-            if [ -f "$contract" ]; then
-              echo "Optimizing: $contract"
-              stellar contract optimize --wasm "$contract"
-            fi
+          shopt -s nullglob
+          wasms=(target/wasm32v1-none/release/*.wasm)
+          if [ ${#wasms[@]} -eq 0 ]; then
+            echo "No WASM artifacts produced" >&2
+            exit 1
+          fi
+          for contract in "${wasms[@]}"; do
+            echo "Optimizing: $contract"
+            stellar contract optimize --wasm "$contract"
           done
-      
+
       - name: Report contract sizes
         run: |
           echo "# Contract Sizes" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          find contracts -name "*.wasm" -type f | while read wasm; do
+          for wasm in target/wasm32v1-none/release/*.wasm; do
             size=$(ls -lh "$wasm" | awk '{print $5}')
-            echo "- $(basename $wasm): $size" >> $GITHUB_STEP_SUMMARY
+            echo "- $(basename "$wasm"): $size" >> $GITHUB_STEP_SUMMARY
           done
