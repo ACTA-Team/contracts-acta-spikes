@@ -1,0 +1,22 @@
+[package]
+name = "vc-supply-chain-provenance-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-sdk = { version = "27.0.3", features = ["testutils"] }
+vc-supply-chain-provenance-contract = { path = "..", features = ["testutils"] }
+vc-revocation-registry-contract = { path = "../../vc-revocation-registry", features = ["testutils"] }
+
+[workspace]
+
+[[bin]]
+name = "fuzz_custody_chain"
+path = "fuzz_targets/fuzz_custody_chain.rs"
+test = false
+doc = false
