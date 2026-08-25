@@ -353,6 +353,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "credential-gated-dao-contract"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "registry-core",
+ "soroban-sdk",
+ "vc-issuer-registry-contract",
+ "vc-revocation-registry-contract",
+ "vc-schema-registry-contract",
+ "vc-verifier-contract",
+]
+
+[[package]]
 name = "crypto-bigint"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

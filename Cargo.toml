@@ -9,6 +9,7 @@ members = [
     "contracts/vc-schema-registry",
     "contracts/vc-status-list",
     "contracts/vc-verifier",
+    "contracts/credential-gated-dao",
 ]
 
 [workspace.package]

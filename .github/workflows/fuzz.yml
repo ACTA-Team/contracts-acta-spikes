@@ -28,6 +28,8 @@ jobs:
             target: fuzz_schema_id
           - contract: vc-revocation-registry
             target: fuzz_credential_id
+          - contract: credential-gated-dao
+            target: fuzz_proposal_voting
 
     steps:
       - uses: actions/checkout@v4
