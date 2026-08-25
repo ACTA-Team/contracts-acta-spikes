@@ -12,6 +12,7 @@ This repository contains various contract implementations, proof-of-concepts, an
   - `vc-schema-registry` - On-chain registry for Verifiable Credential schema definitions
   - `credential-gated-dao` - Credential-weighted governance with proposal lifecycle
   - `credential-escrow` - Conditional token escrow released against verified credentials
+  - `vc-supply-chain-provenance` - Append-only custody chain with terminal sealing
 - `docs/` - Documentation and specifications
 - `scripts/` - Build and deployment utilities
 
@@ -24,6 +25,7 @@ This repository contains various contract implementations, proof-of-concepts, an
 | [`vc-schema-registry`](contracts/vc-schema-registry/README.md) | On-chain registry for Verifiable Credential schema definitions |
 | [`credential-gated-dao`](contracts/credential-gated-dao/README.md) | Credential-weighted governance with bounded proposal voting |
 | [`credential-escrow`](contracts/credential-escrow/README.md) | Conditional token escrow with credential-gated release and deadline refund |
+| [`vc-supply-chain-provenance`](contracts/vc-supply-chain-provenance/README.md) | Append-only supply-chain custody chain with terminal sealing and revocation checks |
 
 ## Building
 

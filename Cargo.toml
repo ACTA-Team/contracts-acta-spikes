@@ -11,6 +11,7 @@ members = [
     "contracts/vc-verifier",
     "contracts/credential-gated-dao",
     "contracts/credential-escrow",
+    "contracts/vc-supply-chain-provenance",
 ]
 
 [workspace.package]

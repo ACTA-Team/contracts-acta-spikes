@@ -32,6 +32,8 @@ jobs:
             target: fuzz_proposal_voting
           - contract: credential-escrow
             target: fuzz_escrow_settlement
+          - contract: vc-supply-chain-provenance
+            target: fuzz_custody_chain
 
     steps:
       - uses: actions/checkout@v4

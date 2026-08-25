@@ -1941,6 +1941,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vc-supply-chain-provenance-contract"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "registry-core",
+ "soroban-sdk",
+ "vc-revocation-registry-contract",
+]
+
+[[package]]
 name = "vc-verifier-contract"
 version = "0.1.0"
 dependencies = [
