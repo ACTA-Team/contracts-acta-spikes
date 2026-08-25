@@ -10,6 +10,7 @@ This repository contains various contract implementations, proof-of-concepts, an
   - `vc-issuer-registry` - Allowlist and metadata registry for VC issuers
   - `vc-revocation-registry` - Revocation status tracking for credentials
   - `vc-schema-registry` - On-chain registry for Verifiable Credential schema definitions
+  - `credential-gated-dao` - Credential-weighted governance with proposal lifecycle
 - `docs/` - Documentation and specifications
 - `scripts/` - Build and deployment utilities
 
@@ -20,6 +21,7 @@ This repository contains various contract implementations, proof-of-concepts, an
 | [`vc-issuer-registry`](contracts/vc-issuer-registry/README.md) | On-chain allowlist and metadata registry for VC issuers |
 | [`vc-revocation-registry`](contracts/vc-revocation-registry/README.md) | Revocation status tracking for credentials |
 | [`vc-schema-registry`](contracts/vc-schema-registry/README.md) | On-chain registry for Verifiable Credential schema definitions |
+| [`credential-gated-dao`](contracts/credential-gated-dao/README.md) | Credential-weighted governance with bounded proposal voting |
 
 ## Building
 
