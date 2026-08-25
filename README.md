@@ -13,6 +13,7 @@ This repository contains various contract implementations, proof-of-concepts, an
   - `credential-gated-dao` - Credential-weighted governance with proposal lifecycle
   - `credential-escrow` - Conditional token escrow released against verified credentials
   - `vc-supply-chain-provenance` - Append-only custody chain with terminal sealing
+  - `vc-health-license-registry` - Professional licenses with derived status (expiry, suspension, revocation)
 - `docs/` - Documentation and specifications
 - `scripts/` - Build and deployment utilities
 
@@ -26,6 +27,7 @@ This repository contains various contract implementations, proof-of-concepts, an
 | [`credential-gated-dao`](contracts/credential-gated-dao/README.md) | Credential-weighted governance with bounded proposal voting |
 | [`credential-escrow`](contracts/credential-escrow/README.md) | Conditional token escrow with credential-gated release and deadline refund |
 | [`vc-supply-chain-provenance`](contracts/vc-supply-chain-provenance/README.md) | Append-only supply-chain custody chain with terminal sealing and revocation checks |
+| [`vc-health-license-registry`](contracts/vc-health-license-registry/README.md) | Professional license registry with derived status from expiry, suspension, and revocation |
 
 ## Building
 

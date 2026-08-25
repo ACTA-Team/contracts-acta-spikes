@@ -1,0 +1,22 @@
+[package]
+name = "vc-health-license-registry-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-sdk = { version = "27.0.3", features = ["testutils"] }
+vc-health-license-registry-contract = { path = "..", features = ["testutils"] }
+vc-issuer-registry-contract = { path = "../../vc-issuer-registry", features = ["testutils"] }
+
+[workspace]
+
+[[bin]]
+name = "fuzz_license_lifecycle"
+path = "fuzz_targets/fuzz_license_lifecycle.rs"
+test = false
+doc = false
