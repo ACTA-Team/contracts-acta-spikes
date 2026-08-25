@@ -12,6 +12,7 @@ members = [
     "contracts/credential-gated-dao",
     "contracts/credential-escrow",
     "contracts/vc-supply-chain-provenance",
+    "contracts/vc-health-license-registry",
 ]
 
 [workspace.package]
