@@ -6,3 +6,5 @@ tarpaulin-report.html
 **/fuzz/artifacts/
 **/fuzz/Cargo.lock
 skills-lock.json
+config.bat
+node_modules
